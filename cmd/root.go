@@ -11,7 +11,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gosp",
+	Use:   "spotgo",
 	Short: "A CLI tool for managing your spotify playback",
 	Long: `A CLI tool for managing your spotify playback. This allows you to control your spotify playback from the terminal. 
 This tool is built using the Spotify Web API. You will need to have a Spotify account to use this tool.
