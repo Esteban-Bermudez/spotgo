@@ -67,14 +67,13 @@ func connectToSpotify(cmd *cobra.Command, args []string) {
 			log.Fatal(err)
 		}
 	}
-	saveOAuthToken(token)
 	client := spotify.New(auth.Client(context.Background(), token))
 	user, err := client.CurrentUser(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println("You are logged in as:", user.DisplayName)
-
+	saveOAuthToken(token)
 }
 
 func generateRandomString(size int) (string, error) {
