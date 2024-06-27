@@ -11,8 +11,11 @@ import (
 	"net/http"
 	"os"
 	"time"
+  "net/url"
+  "io"
+  "strings"
 
-  "github.com/adrg/xdg"
+	"github.com/adrg/xdg"
 	"github.com/mozillazg/request"
 	"github.com/spf13/cobra"
 	"github.com/zmb3/spotify/v2"
@@ -24,7 +27,6 @@ import (
 // You must register an application at Spotify's developer portal
 // and enter this value.
 const redirectURI = "http://localhost:8080/callback"
-
 
 // clientId is the client ID for the application. You must register
 // an application at Spotify's developer portal and enter this value.
@@ -39,7 +41,7 @@ var (
 		spotifyauth.WithScopes(spotifyauth.ScopeUserReadPlaybackState,
 			spotifyauth.ScopeUserReadCurrentlyPlaying,
 			spotifyauth.ScopeUserModifyPlaybackState))
-	tokenCh       = make(chan *oauth2.Token)
+	tokenCh = make(chan *oauth2.Token)
 )
 
 var connectCmd = &cobra.Command{
@@ -60,9 +62,10 @@ func connectToSpotify(cmd *cobra.Command, args []string) {
 		if err.Error() == "Token not found" {
 			login()
 			token = <-tokenCh
-		} else if !token.Valid() {
+		} else if err.Error() == "Token expired" {
 			fmt.Println("Refreshing token...")
-			token = updateToken(token)
+			// token = updateToken(token)
+      token = refreshToken(token)
 		} else {
 			log.Fatal(err)
 		}
@@ -151,7 +154,7 @@ func loadOAuthToken() (*oauth2.Token, error) {
 }
 
 func saveOAuthToken(token *oauth2.Token) error {
-  tokenFilePath, err := xdg.ConfigFile("spotgo/token.json")
+	tokenFilePath, err := xdg.ConfigFile("spotgo/token.json")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -161,7 +164,7 @@ func saveOAuthToken(token *oauth2.Token) error {
 		return err
 	}
 	fmt.Println("Saving token to", tokenFilePath)
-	return os.WriteFile(tokenFilePath , jsonToken, 0600)
+	return os.WriteFile(tokenFilePath, jsonToken, 0600)
 }
 
 func updateToken(token *oauth2.Token) *oauth2.Token {
@@ -201,4 +204,44 @@ func updateToken(token *oauth2.Token) *oauth2.Token {
 	}
 	return &newToken
 
+}
+
+func refreshToken(oldToken *oauth2.Token) *oauth2.Token {
+
+	form := url.Values{}
+	form.Add("grant_type", "refresh_token")
+	form.Add("refresh_token", oldToken.RefreshToken)
+	form.Add("client_id", clientId)
+
+	req, err := http.NewRequest("POST", "https://accounts.spotify.com/api/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+
+	var newToken oauth2.Token
+	if err := json.Unmarshal(body, &newToken); err != nil {
+		log.Fatal(err)
+		return nil
+	}
+	if newToken.Expiry.IsZero() {
+		newToken.Expiry = time.Now().Add(time.Duration(3600) * time.Second)
+	}
+
+	return &newToken
 }
