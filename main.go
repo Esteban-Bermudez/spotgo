@@ -3,7 +3,7 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 */
 package main
 
-import "spotgo/cmd"
+import "github.com/Esteban-Bermudez/spotgo/cmd"
 
 func main() {
 	cmd.Execute()
