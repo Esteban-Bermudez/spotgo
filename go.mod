@@ -1,4 +1,4 @@
-module spotgo
+module github.com/Esteban-Bermudez/spotgo
 
 go 1.22.2
 
