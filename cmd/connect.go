@@ -7,13 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
-  "net/url"
-  "io"
-  "strings"
 
 	"github.com/adrg/xdg"
 	"github.com/mozillazg/request"
@@ -65,7 +65,7 @@ func connectToSpotify(cmd *cobra.Command, args []string) {
 		} else if err.Error() == "Token expired" {
 			fmt.Println("Refreshing token...")
 			// token = updateToken(token)
-      token = refreshToken(token)
+			token = refreshToken(token)
 		} else {
 			log.Fatal(err)
 		}
@@ -134,8 +134,8 @@ func completeAuth(state string, codeVerifier string) http.HandlerFunc {
 	}
 }
 func loadOAuthToken() (*oauth2.Token, error) {
-  tokenFile, _ := xdg.SearchConfigFile("spotgo/token.json")
-	jsonToken, err := os.ReadFile(tokenFile) 
+	tokenFile, _ := xdg.SearchConfigFile("spotgo/token.json")
+	jsonToken, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return nil, fmt.Errorf("Token not found")
 	}

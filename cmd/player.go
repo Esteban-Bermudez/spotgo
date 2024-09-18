@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
-  "os"
 
 	bubbletea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -70,7 +70,7 @@ func inlineSongLoop(token *oauth2.Token) {
 	} else {
 		fmt.Printf("󰝚  %s - %s | %s\n", playerState.Item.Name, playerState.Item.Artists[0].Name, progressBar(playerState))
 	}
-  os.Exit(0)
+	os.Exit(0)
 }
 
 type model struct {
@@ -140,9 +140,9 @@ func fetchSongInfo() bubbletea.Msg {
 }
 
 func progressBar(playerState *spotify.PlayerState) string {
-  return fmt.Sprintf("%02d:%02d / %02d:%02d",
+	return fmt.Sprintf("%02d:%02d / %02d:%02d",
 		(playerState.Progress/1000)/60,
 		(playerState.Progress/1000)%60,
 		(playerState.Item.Duration/1000)/60,
-		(playerState.Item.Duration/1000)%60)  
+		(playerState.Item.Duration/1000)%60)
 }
