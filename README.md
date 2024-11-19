@@ -25,4 +25,5 @@ spotgo [command]
 ### Commands
 - `connect` - Connect to a Spotify account
 - `player` - View current Spotify playing data
-    - `--inline` - show playing data in one line (made for tmux)
+    - `--one-line` - show playing data in one line (works well with status bars)
+    - `--no-progress` - hide progress bar in one line mode
