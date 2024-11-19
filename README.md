@@ -1,4 +1,7 @@
 # spotgo
+[![Go Report Card](https://goreportcard.com/badge/github.com/Esteban-Bermudez/spotgo)](https://goreportcard.com/report/github.com/Esteban-Bermudez/spotgo)
+![GitHub Release](https://img.shields.io/github/v/release/Esteban-Bermudez/spotgo)
+
 a CLI tool for Spotify written in Go
 
 This project is a work in progress. The goal is to create a CLI tool for Spotify that allows users to interact with their currently playing music from the command line.
