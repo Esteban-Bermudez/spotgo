@@ -24,7 +24,8 @@ var playerCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(playerCmd)
 
-	playerCmd.Flags().BoolP("inline", "i", false, "Inline output")
+	playerCmd.Flags().BoolP("one-line", "o", false, "Output without Bubble Tea on one line")
+	playerCmd.Flags().BoolP("no-progress", "", false, "Do not include progress bar")
 }
 
 var songTitle = "No Song Playing"
@@ -32,15 +33,16 @@ var currentArtists = ""
 var currentAlbum = ""
 
 func spotifyPlayer(cmd *cobra.Command, args []string) {
-	inline, _ := cmd.Flags().GetBool("inline")
+	oneLine, _ := cmd.Flags().GetBool("one-line")
+	noProgress, _ := cmd.Flags().GetBool("no-progress")
 
 	token, err := loadOAuthToken()
 	if err != nil {
 		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
 	}
 
-	if inline {
-		inlineSongLoop(token)
+	if oneLine {
+		inlineSongLoop(token, noProgress)
 	}
 
 	p := bubbletea.NewProgram(model{
@@ -57,22 +59,30 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	}
 }
 
-func inlineSongLoop(token *oauth2.Token) {
+func inlineSongLoop(token *oauth2.Token, noProgress bool) {
 	client := spotify.New(auth.Client(context.Background(), token))
 	playerState, err := client.PlayerState(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	output := ""
+
 	if playerState.Item == nil {
 		fmt.Println("󰝛")
 		time.Sleep(5 * time.Second)
 	} else if playerState.Item != nil && playerState.Playing {
-		fmt.Printf("󰝚  %s - %s | %s\n", playerState.Item.Name, playerState.Item.Artists[0].Name, progressBar(playerState))
+		output = fmt.Sprintf("󰝚  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	} else {
-		fmt.Printf("󰝚  %s - %s | %s\n", playerState.Item.Name, playerState.Item.Artists[0].Name, progressBar(playerState))
+		output = fmt.Sprintf("󰝚  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	}
-	os.Exit(0)
+
+  if playerState.Item != nil && !noProgress {
+    output = fmt.Sprintf("%s | %s", output, progressBar(playerState))
+  }
+
+  fmt.Println(output)
+  os.Exit(0)
 }
 
 type model struct {
