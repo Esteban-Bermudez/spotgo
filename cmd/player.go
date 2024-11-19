@@ -28,7 +28,8 @@ func init() {
 }
 
 var songTitle = "No Song Playing"
-var artistAlbum = ""
+var currentArtists = ""
+var currentAlbum = ""
 
 func spotifyPlayer(cmd *cobra.Command, args []string) {
 	inline, _ := cmd.Flags().GetBool("inline")
@@ -43,10 +44,11 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	}
 
 	p := bubbletea.NewProgram(model{
-		songTitle:     songTitle,
-		artistAlbum:   artistAlbum,
-		progress:      "00:00 / 00:00",
-		playbackState: false,
+		songTitle:      songTitle,
+		currentArtists: currentArtists,
+		currentAlbum:   currentAlbum,
+		progress:       "00:00 / 00:00",
+		playbackState:  false,
 	})
 
 	_, err = p.Run()
@@ -74,10 +76,11 @@ func inlineSongLoop(token *oauth2.Token) {
 }
 
 type model struct {
-	songTitle     string
-	artistAlbum   string
-	progress      string
-	playbackState bool
+	songTitle      string
+	currentArtists string
+	currentAlbum   string
+	progress       string
+	playbackState  bool
 }
 
 func (m model) Init() bubbletea.Cmd {
@@ -88,7 +91,8 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 	switch msg := msg.(type) {
 	case songInfoMsg:
 		m.songTitle = msg.title
-		m.artistAlbum = msg.artistAlbum
+		m.currentArtists = msg.artists
+		m.currentAlbum = msg.album
 		m.progress = msg.progress
 		return m, fetchSongInfo
 
@@ -103,15 +107,16 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 
 func (m model) View() string {
 	// TODO add a viewport so it has a border and do not include that with tmux
-	content := fmt.Sprintf("# spotgo\n\n%s\n\n%s\n\nProgress: %s", m.songTitle, m.artistAlbum, m.progress)
+	content := fmt.Sprintf("# spotgo\n\n%s\n\n%s\n\n%s\n\nProgress: %s", m.songTitle, m.currentArtists, m.currentAlbum, m.progress)
 	rendered, _ := glamour.Render(content, "dark")
 	return rendered
 }
 
 type songInfoMsg struct {
-	title       string
-	artistAlbum string
-	progress    string
+	title    string
+	artists  string
+	album    string
+	progress string
 }
 
 func fetchSongInfo() bubbletea.Msg {
@@ -129,14 +134,22 @@ func fetchSongInfo() bubbletea.Msg {
 
 	if playerState.Item == nil {
 		time.Sleep(5 * time.Second)
-		return songInfoMsg{title: "No Song Playing", artistAlbum: "", progress: "00:00 / 00:00"}
+		return songInfoMsg{title: "No Song Playing", artists: "", album: "", progress: "00:00 / 00:00"}
 	}
 
 	songTitle := playerState.Item.Name
-	artistAlbum := fmt.Sprintf("%s - %s", playerState.Item.Artists[0].Name, playerState.Item.Album.Name)
+	artists := ""
+	for i, artist := range playerState.Item.Artists {
+		if i == 0 {
+			artists = artist.Name
+		} else {
+			artists = fmt.Sprintf("%s, %s", artists, artist.Name)
+		}
+	}
+	album := playerState.Item.Album.Name
 	progress := progressBar(playerState)
 
-	return songInfoMsg{title: songTitle, artistAlbum: artistAlbum, progress: progress}
+	return songInfoMsg{title: songTitle, artists: artists, album: album, progress: progress}
 }
 
 func progressBar(playerState *spotify.PlayerState) string {
