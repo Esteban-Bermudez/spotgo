@@ -69,7 +69,7 @@ func inlineSongLoop(token *oauth2.Token, noProgress bool) {
 	output := ""
 
 	if playerState.Item == nil {
-		fmt.Println("󰝛")
+		fmt.Print("󰝛")
 		time.Sleep(5 * time.Second)
 	} else if playerState.Item != nil && playerState.Playing {
 		output = fmt.Sprintf("󰝚  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
