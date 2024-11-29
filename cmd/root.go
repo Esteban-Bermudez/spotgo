@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"strings"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -30,12 +32,23 @@ func Execute() {
 	}
 }
 
+func wordSepNormalizeFunc(f *pflag.FlagSet, name string) pflag.NormalizedName {
+	from := []string{"_", ".", "-"}
+	to := ""
+	for _, sep := range from {
+		name = strings.Replace(name, sep, to, -1)
+	}
+	return pflag.NormalizedName(name)
+}
+
 func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gosp.yaml)")
+
+	rootCmd.SetGlobalNormalizationFunc(wordSepNormalizeFunc)
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
