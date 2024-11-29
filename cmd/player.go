@@ -24,7 +24,7 @@ var playerCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(playerCmd)
 
-	playerCmd.Flags().BoolP("one-line", "o", false, "Output without Bubble Tea on one line")
+	playerCmd.Flags().BoolP("oneline", "o", false, "Output playback data on one line")
 	playerCmd.Flags().BoolP("no-progress", "", false, "Do not include progress bar")
 }
 
@@ -77,12 +77,12 @@ func inlineSongLoop(token *oauth2.Token, noProgress bool) {
 		output = fmt.Sprintf("󰝚  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	}
 
-  if playerState.Item != nil && !noProgress {
-    output = fmt.Sprintf("%s | %s", output, progressBar(playerState))
-  }
+	if playerState.Item != nil && !noProgress {
+		output = fmt.Sprintf("%s | %s", output, progressBar(playerState))
+	}
 
-  fmt.Println(output)
-  os.Exit(0)
+	fmt.Println(output)
+	os.Exit(0)
 }
 
 type model struct {
