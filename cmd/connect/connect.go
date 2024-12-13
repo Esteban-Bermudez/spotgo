@@ -1,4 +1,4 @@
-package cmd
+package connect
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	"github.com/adrg/xdg"
 	"github.com/mozillazg/request"
 	"github.com/spf13/cobra"
@@ -35,7 +36,7 @@ const redirectURI = "http://localhost:8080/callback"
 // if it does not require the user to get their own clientID.
 var (
 	clientId = os.Getenv("SPOTIFY_CLIENT_ID")
-	auth     = spotifyauth.New(
+	Auth     = spotifyauth.New(
 		spotifyauth.WithClientID(clientId),
 		spotifyauth.WithRedirectURL(redirectURI),
 		spotifyauth.WithScopes(spotifyauth.ScopeUserReadPlaybackState,
@@ -52,11 +53,11 @@ var connectCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(connectCmd)
+	root.RootCmd.AddCommand(connectCmd)
 }
 
 func connectToSpotify(cmd *cobra.Command, args []string) {
-	token, err := loadOAuthToken()
+	token, err := LoadOAuthToken()
 
 	if err != nil {
 		if err.Error() == "Token not found" {
@@ -70,7 +71,7 @@ func connectToSpotify(cmd *cobra.Command, args []string) {
 			log.Fatal(err)
 		}
 	}
-	client := spotify.New(auth.Client(context.Background(), token))
+	client := spotify.New(Auth.Client(context.Background(), token))
 	user, err := client.CurrentUser(context.Background())
 	if err != nil {
 		log.Fatal(err)
@@ -109,7 +110,7 @@ func login() {
 	http.HandleFunc("/callback", completeAuth(state, codeVerifier))
 	go http.ListenAndServe(":8080", nil)
 
-	url := auth.AuthURL(state,
+	url := Auth.AuthURL(state,
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 	)
@@ -118,7 +119,7 @@ func login() {
 
 func completeAuth(state string, codeVerifier string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tok, err := auth.Token(r.Context(), state, r,
+		tok, err := Auth.Token(r.Context(), state, r,
 			oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 		if err != nil {
 			http.Error(w, "Couldn't get token", http.StatusForbidden)
@@ -133,7 +134,7 @@ func completeAuth(state string, codeVerifier string) http.HandlerFunc {
 		tokenCh <- tok
 	}
 }
-func loadOAuthToken() (*oauth2.Token, error) {
+func LoadOAuthToken() (*oauth2.Token, error) {
 	tokenFile, _ := xdg.SearchConfigFile("spotgo/token.json")
 	jsonToken, err := os.ReadFile(tokenFile)
 	if err != nil {
