@@ -1,4 +1,4 @@
-package cmd
+package player
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
+	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	bubbletea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/spf13/cobra"
@@ -22,7 +24,7 @@ var playerCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(playerCmd)
+	root.RootCmd.AddCommand(playerCmd)
 
 	playerCmd.Flags().BoolP("oneline", "o", false, "Output playback data on one line")
 	playerCmd.Flags().BoolP("no-progress", "", false, "Do not include progress bar")
@@ -36,13 +38,13 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	oneLine, _ := cmd.Flags().GetBool("one-line")
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 
-	token, err := loadOAuthToken()
+	token, err := connect.LoadOAuthToken()
 	if err != nil {
 		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
 	}
 
 	if oneLine {
-		inlineSongLoop(token, noProgress)
+		oneLineOutput(token, noProgress)
 	}
 
 	p := bubbletea.NewProgram(model{
@@ -59,8 +61,8 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	}
 }
 
-func inlineSongLoop(token *oauth2.Token, noProgress bool) {
-	client := spotify.New(auth.Client(context.Background(), token))
+func oneLineOutput(token *oauth2.Token, noProgress bool) {
+	client := spotify.New(connect.Auth.Client(context.Background(), token))
 	playerState, err := client.PlayerState(context.Background())
 	if err != nil {
 		log.Fatal(err)
@@ -69,12 +71,12 @@ func inlineSongLoop(token *oauth2.Token, noProgress bool) {
 	output := ""
 
 	if playerState.Item == nil {
-		fmt.Print("󰝛")
+		fmt.Print("󰓇")
 		time.Sleep(5 * time.Second)
 	} else if playerState.Item != nil && playerState.Playing {
-		output = fmt.Sprintf("󰝚  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
+		output = fmt.Sprintf("󰓇  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	} else {
-		output = fmt.Sprintf("󰝚  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
+		output = fmt.Sprintf("󰓇  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	}
 
 	if playerState.Item != nil && !noProgress {
@@ -131,12 +133,12 @@ type songInfoMsg struct {
 
 func fetchSongInfo() bubbletea.Msg {
 	// Load OAuth token and create Spotify client
-	token, err := loadOAuthToken()
+	token, err := connect.LoadOAuthToken()
 	if err != nil {
 		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
 	}
 
-	client := spotify.New(auth.Client(context.Background(), token))
+	client := spotify.New(connect.Auth.Client(context.Background(), token))
 	playerState, err := client.PlayerState(context.Background())
 	if err != nil {
 		log.Fatal(err)
