@@ -18,7 +18,7 @@ var playerNextCmd = &cobra.Command{
 }
 
 func init() {
-	playerCmd.AddCommand(playerPauseCmd)
+	playerCmd.AddCommand(playerNextCmd)
 }
 
 func spotifyNext(cmd *cobra.Command, args []string) {
