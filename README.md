@@ -44,6 +44,7 @@ track.
 - `toggle` - Toggle between play and pause states
 - `next` - Skip to the next track
 - `prev` - Skip to the previous track
+- `shuffle` - Toggle shuffle state
 
 **Flags**
 - `--one-line` - show playing data in one line (works well with status bars)
