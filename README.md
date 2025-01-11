@@ -8,7 +8,7 @@ This project is a work in progress. The goal is to create a CLI tool for Spotify
 
 ## Installation
 ```bash
-go install github.com/Esteban-Bermudez/spotgo@latest
+go install github.com/Esteban-Bermudez/spotgo/cmd/spotgo@latest
 ```
 Or install the binary from the [releases page](https://github.com/Esteban-Bermudez/spotgo/releases)
 
