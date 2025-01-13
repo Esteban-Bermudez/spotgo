@@ -9,7 +9,7 @@ import (
 	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	bubbletea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/zmb3/spotify/v2"
 )
@@ -28,10 +28,6 @@ func init() {
 	playerCmd.Flags().BoolP("no-progress", "", false, "Do not include progress bar")
 }
 
-var songTitle = "No Song Playing"
-var currentArtists = ""
-var currentAlbum = ""
-
 func spotifyPlayer(cmd *cobra.Command, args []string) {
 	oneLine, _ := cmd.Flags().GetBool("one-line")
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
@@ -40,18 +36,18 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
 	}
+	client := spotify.New(connect.Auth.Client(context.Background(), token))
 
 	if oneLine {
-		oneLineOutput(token, noProgress)
+		oneLineOutput(client, noProgress)
 	}
 
 	p := bubbletea.NewProgram(model{
-		songTitle:      songTitle,
-		currentArtists: currentArtists,
-		currentAlbum:   currentAlbum,
-		progress:       "00:00 / 00:00",
-		playbackState:  false,
-	})
+		client:        client,
+		songTitle:     "No Song Playing",
+		progress:      "00:00 / 00:00",
+		playbackState: false,
+	}, bubbletea.WithAltScreen())
 
 	_, err = p.Run()
 	if err != nil {
@@ -60,25 +56,32 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 }
 
 type model struct {
+	client         *spotify.Client
 	songTitle      string
 	currentArtists string
 	currentAlbum   string
 	progress       string
 	playbackState  bool
+	width          int
+	height         int
 }
 
 func (m model) Init() bubbletea.Cmd {
-	return fetchSongInfo
+	return fetchSongInfo(m)
 }
 
 func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 	switch msg := msg.(type) {
+	case bubbletea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, bubbletea.SetWindowTitle("spotgo")
 	case songInfoMsg:
 		m.songTitle = msg.title
 		m.currentArtists = msg.artists
 		m.currentAlbum = msg.album
 		m.progress = msg.progress
-		return m, fetchSongInfo
+		return m, fetchSongInfo(m)
 
 	case bubbletea.KeyMsg:
 		if msg.String() == "ctrl+c" || msg.String() == "q" {
@@ -90,10 +93,23 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 }
 
 func (m model) View() string {
-	// TODO add a viewport so it has a border and do not include that with tmux
-	content := fmt.Sprintf("# spotgo\n\n%s\n\n%s\n\n%s\n\nProgress: %s", m.songTitle, m.currentArtists, m.currentAlbum, m.progress)
-	rendered, _ := glamour.Render(content, "dark")
-	return rendered
+	// Define styles
+	var style = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("2")). // Green
+		Align(lipgloss.Center).AlignHorizontal(lipgloss.Center).AlignVertical(lipgloss.Center).
+		Width(70).
+		Height(20)
+
+	content := fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n\n%s\n\nProgress: %s",
+		lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("spotgo"), // Bold High Intensity Green
+		m.songTitle,
+		m.currentArtists,
+		m.currentAlbum,
+		m.progress,
+	)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, style.Render(content))
 }
 
 type songInfoMsg struct {
@@ -103,37 +119,38 @@ type songInfoMsg struct {
 	progress string
 }
 
-func fetchSongInfo() bubbletea.Msg {
-	// Load OAuth token and create Spotify client
-	token, err := connect.LoadOAuthToken()
-	if err != nil {
-		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
-	}
-
-	client := spotify.New(connect.Auth.Client(context.Background(), token))
-	playerState, err := client.PlayerState(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if playerState.Item == nil {
-		time.Sleep(5 * time.Second)
-		return songInfoMsg{title: "No Song Playing", artists: "", album: "", progress: "00:00 / 00:00"}
-	}
-
-	songTitle := playerState.Item.Name
-	artists := ""
-	for i, artist := range playerState.Item.Artists {
-		if i == 0 {
-			artists = artist.Name
-		} else {
-			artists = fmt.Sprintf("%s, %s", artists, artist.Name)
+func fetchSongInfo(m model) bubbletea.Cmd {
+	return func() bubbletea.Msg {
+		// Load OAuth token and create Spotify client
+		playerState, err := m.client.PlayerState(context.Background())
+		if err != nil {
+			log.Fatal(err)
 		}
-	}
-	album := playerState.Item.Album.Name
-	progress := progressBar(playerState)
 
-	return songInfoMsg{title: songTitle, artists: artists, album: album, progress: progress}
+		if playerState.Item == nil {
+			time.Sleep(5 * time.Second)
+			return songInfoMsg{
+				title:    "No Song Playing",
+				artists:  "",
+				album:    "",
+				progress: "00:00 / 00:00",
+			}
+		}
+
+		songTitle := playerState.Item.Name
+		artists := ""
+		for i, artist := range playerState.Item.Artists {
+			if i == 0 {
+				artists = artist.Name
+			} else {
+				artists = fmt.Sprintf("%s, %s", artists, artist.Name)
+			}
+		}
+		album := playerState.Item.Album.Name
+		progress := progressBar(playerState)
+
+		return songInfoMsg{title: songTitle, artists: artists, album: album, progress: progress}
+	}
 }
 
 func progressBar(playerState *spotify.PlayerState) string {
