@@ -1,18 +1,15 @@
 package player
 
 import (
-  "context"
-  "fmt"
-  "log"
-  "os"
-  "time"
-	"golang.org/x/oauth2"
-	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
-  "github.com/zmb3/spotify/v2"
+	"context"
+	"fmt"
+	"github.com/zmb3/spotify/v2"
+	"log"
+	"os"
+	"time"
 )
 
-func oneLineOutput(token *oauth2.Token, noProgress bool) {
-	client := spotify.New(connect.Auth.Client(context.Background(), token))
+func oneLineOutput(client *spotify.Client, noProgress bool) {
 	playerState, err := client.PlayerState(context.Background())
 	if err != nil {
 		log.Fatal(err)
