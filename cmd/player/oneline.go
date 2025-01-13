@@ -21,12 +21,12 @@ func oneLineOutput(token *oauth2.Token, noProgress bool) {
 	output := ""
 
 	if playerState.Item == nil {
-		fmt.Print("󰓇")
+		fmt.Print("  No Song Playing")
 		time.Sleep(5 * time.Second)
 	} else if playerState.Item != nil && playerState.Playing {
-		output = fmt.Sprintf("󰓇  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
+		output = fmt.Sprintf("  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	} else {
-		output = fmt.Sprintf("󰓇  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
+		output = fmt.Sprintf("  %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 	}
 
 	if playerState.Item != nil && !noProgress {
