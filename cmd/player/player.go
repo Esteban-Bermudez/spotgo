@@ -16,8 +16,8 @@ import (
 
 var playerCmd = &cobra.Command{
 	Use:   "player",
-	Short: "Connect to Spotify",
-	Long:  `Connect to Spotify to receive now playing information`,
+	Short: "Show now playing information",
+	Long:  `Show the current spotify playback session in a full screen terminal interface`,
 	Run:   spotifyPlayer,
 }
 
