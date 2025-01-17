@@ -81,6 +81,7 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 		m.currentArtists = msg.artists
 		m.currentAlbum = msg.album
 		m.progress = msg.progress
+		m.playbackState = msg.playbackState
 		return m, fetchSongInfo(m)
 
 	case bubbletea.KeyMsg:
@@ -98,25 +99,47 @@ func (m model) View() string {
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("2")). // Green
 		Align(lipgloss.Center).AlignHorizontal(lipgloss.Center).AlignVertical(lipgloss.Center).
-		Width(70).
-		Height(20)
+		Width(50).
+		Height(10)
+
+	var icon string
+	if m.playbackState {
+		icon = "(||)"
+	} else {
+		icon = "(|>)"
+	}
 
 	content := fmt.Sprintf(
-		"%s\n\n%s\n\n%s\n\n%s\n\nProgress: %s",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("spotgo"), // Bold High Intensity Green
+		"%s\n\n%s\n\n%s\n\n|<| %s |>|\n%s",
 		m.songTitle,
 		m.currentArtists,
 		m.currentAlbum,
+		icon,
 		m.progress,
 	)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, style.Render(content))
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		lipgloss.NewStyle().
+			Foreground(lipgloss.Color("10")).
+			Bold(true).
+			Align(lipgloss.Left).
+      Width(50).
+			Render("spotgo")+"\n"+
+			style.Render(
+				content),
+	)
 }
 
 type songInfoMsg struct {
-	title    string
-	artists  string
-	album    string
-	progress string
+	title         string
+	artists       string
+	album         string
+	progress      string
+	playbackState bool
 }
 
 func fetchSongInfo(m model) bubbletea.Cmd {
@@ -133,7 +156,7 @@ func fetchSongInfo(m model) bubbletea.Cmd {
 				title:    "No Song Playing",
 				artists:  "",
 				album:    "",
-				progress: "00:00 / 00:00",
+				progress: "00:00 // 00:00",
 			}
 		}
 
@@ -149,12 +172,18 @@ func fetchSongInfo(m model) bubbletea.Cmd {
 		album := playerState.Item.Album.Name
 		progress := progressBar(playerState)
 
-		return songInfoMsg{title: songTitle, artists: artists, album: album, progress: progress}
+		return songInfoMsg{
+			title:         songTitle,
+			artists:       artists,
+			album:         album,
+			progress:      progress,
+			playbackState: playerState.Item != nil && playerState.Playing,
+		}
 	}
 }
 
 func progressBar(playerState *spotify.PlayerState) string {
-	return fmt.Sprintf("%02d:%02d / %02d:%02d",
+	return fmt.Sprintf("%02d:%02d // %02d:%02d",
 		(playerState.Progress/1000)/60,
 		(playerState.Progress/1000)%60,
 		(playerState.Item.Duration/1000)/60,
