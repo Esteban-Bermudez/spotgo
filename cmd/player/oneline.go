@@ -3,14 +3,16 @@ package player
 import (
 	"context"
 	"fmt"
-	"github.com/zmb3/spotify/v2"
 	"log"
+	"os"
 	"time"
+
+	"github.com/zmb3/spotify/v2"
 )
 
-func oneLineOutput(client *spotify.Client, noProgress bool) {
-
+func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 	output := ""
+	index := 0
 	icon := " "
 	for {
 		playerState, err := client.PlayerState(context.Background())
@@ -19,8 +21,8 @@ func oneLineOutput(client *spotify.Client, noProgress bool) {
 		}
 
 		if playerState.Item == nil {
-			fmt.Print("  No Song Playing")
-			time.Sleep(5 * time.Second)
+			fmt.Print("\r  No Song Playing")
+			os.Exit(0)
 		} else if playerState.Item != nil && playerState.Playing {
 			icon = " "
 			output = fmt.Sprintf(" %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
@@ -33,14 +35,24 @@ func oneLineOutput(client *spotify.Client, noProgress bool) {
 			output = fmt.Sprintf("%s | %s ", output, progressBar(playerState))
 		}
 
-
+		// Rotate the output string by one character to the left. This creates a
+		// scrolling effect for output strings that are longer than scroll characters.
+		if len(output) > scroll && scroll > 0 {
+			output = icon + output[index:] + " " + output[:index]
+		} else {
+			output = icon + output
+		}
 
 		// This overwrites the previous line with the new song info. This is done by
 		// using a carriage return character (\r) to return the cursor to the start
 		// of the line and then printing the new song info.
-		// The ANSI escape code \033[K clears the line from the current cursor
-		// position to the end of the line.
-    fmt.Printf("\r%s\033[K", icon + output)
+		fmt.Printf("\r%s", output)
+
+		if index >= len(output)-len(icon)-1 {
+			index = 0
+		} else {
+			index++
+		}
 
 		// Sleep for a second before fetching the next song info. This helps to
 		// reduce the number of requests made to the Spotify API.
