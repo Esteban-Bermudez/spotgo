@@ -48,3 +48,4 @@ track.
 **Flags**
 - `--one-line` - show playing data in one line (works well with status bars)
 - `--no-progress` - hide progress bar in one line mode
+- `-s, --scroll int` - scroll the output string if greater than n characters

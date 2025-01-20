@@ -26,11 +26,13 @@ func init() {
 
 	playerCmd.Flags().BoolP("oneline", "o", false, "Output playback data on one line")
 	playerCmd.Flags().BoolP("no-progress", "", false, "Do not include progress bar")
+	playerCmd.Flags().IntP("scroll", "s", 0, "Scroll the output string if greater than n characters")
 }
 
 func spotifyPlayer(cmd *cobra.Command, args []string) {
 	oneLine, _ := cmd.Flags().GetBool("one-line")
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
+	scroll, _ := cmd.Flags().GetInt("scroll")
 
 	token, err := connect.LoadOAuthToken()
 	if err != nil {
@@ -39,7 +41,7 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	client := spotify.New(connect.Auth.Client(context.Background(), token))
 
 	if oneLine {
-		oneLineOutput(client, noProgress)
+		oneLineOutput(client, noProgress, scroll)
 	}
 
 	p := bubbletea.NewProgram(model{
@@ -127,7 +129,7 @@ func (m model) View() string {
 			Foreground(lipgloss.Color("10")).
 			Bold(true).
 			Align(lipgloss.Left).
-      Width(50).
+			Width(50).
 			Render("spotgo")+"\n"+
 			style.Render(
 				content),
