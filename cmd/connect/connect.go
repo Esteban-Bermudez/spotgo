@@ -45,7 +45,7 @@ var (
 	tokenCh = make(chan *oauth2.Token)
 )
 
-var connectCmd = &cobra.Command{
+var ConnectCmd = &cobra.Command{
 	Use:   "connect",
 	Short: "Connect to Spotify",
 	Long:  `Connect to Spotify to receive now playing information`,
@@ -53,7 +53,7 @@ var connectCmd = &cobra.Command{
 }
 
 func init() {
-	root.RootCmd.AddCommand(connectCmd)
+	root.RootCmd.AddCommand(ConnectCmd)
 }
 
 func connectToSpotify(cmd *cobra.Command, args []string) {
@@ -66,7 +66,7 @@ func connectToSpotify(cmd *cobra.Command, args []string) {
 		} else if err.Error() == "Token expired" {
 			fmt.Println("Refreshing token...")
 			// token = updateToken(token)
-			token = refreshToken(token)
+			token = RefreshToken(token)
 		} else {
 			log.Fatal(err)
 		}

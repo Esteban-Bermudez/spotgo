@@ -18,6 +18,9 @@ var playerCmd = &cobra.Command{
 	Use:   "player",
 	Short: "Show now playing information",
 	Long:  `Show the current spotify playback session in a full screen terminal interface`,
+  PersistentPreRun: func(cmd *cobra.Command, args []string) {
+    connect.ConnectCmd.Run(cmd, args)
+  },
 	Run:   spotifyPlayer,
 }
 
@@ -26,7 +29,8 @@ func init() {
 
 	playerCmd.Flags().BoolP("oneline", "o", false, "Output playback data on one line")
 	playerCmd.Flags().BoolP("no-progress", "", false, "Do not include progress bar")
-	playerCmd.Flags().IntP("scroll", "s", 0, "Scroll the output string if greater than n characters")
+	playerCmd.Flags().
+		IntP("scroll", "s", 0, "Scroll the output string if greater than n characters")
 }
 
 func spotifyPlayer(cmd *cobra.Command, args []string) {
