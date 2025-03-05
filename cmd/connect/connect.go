@@ -207,7 +207,7 @@ func updateToken(token *oauth2.Token) *oauth2.Token {
 
 }
 
-func refreshToken(oldToken *oauth2.Token) *oauth2.Token {
+func RefreshToken(oldToken *oauth2.Token) *oauth2.Token {
 
 	form := url.Values{}
 	form.Add("grant_type", "refresh_token")
