@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/zmb3/spotify/v2"
@@ -13,7 +12,7 @@ import (
 func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 	output := ""
 	index := 0
-	icon := " "
+	icon := "󰝛 "
 	for {
 		playerState, err := client.PlayerState(context.Background())
 		if err != nil {
@@ -21,18 +20,17 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 		}
 
 		if playerState.Item == nil {
-			fmt.Print("\r  No Song Playing")
-			os.Exit(0)
+			fmt.Print("\r󰝛  No Song Playing")
 		} else if playerState.Item != nil && playerState.Playing {
-			icon = " "
+			icon = "  "
 			output = fmt.Sprintf(" %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 		} else {
-			icon = " "
+			icon = "  "
 			output = fmt.Sprintf(" %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 		}
 
 		if playerState.Item != nil && !noProgress {
-			output = fmt.Sprintf("%s | %s ", output, progressBar(playerState))
+			output = fmt.Sprintf(" %s | %s ", output, progressBar(playerState))
 		}
 
 		// Rotate the output string by one character to the left. This creates a
@@ -52,6 +50,7 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 			index = 0
 		} else {
 			index++
+			index = index % (len(output) - len(icon) - 1)
 		}
 
 		// Sleep for a second before fetching the next song info. This helps to

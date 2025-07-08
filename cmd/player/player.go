@@ -120,9 +120,9 @@ func (m model) View() string {
 
 	var icon string
 	if m.playbackState {
-		icon = "(||)"
+		icon = " "
 	} else {
-		icon = "(|>)"
+		icon = " "
 	}
 
 	content := fmt.Sprintf(
