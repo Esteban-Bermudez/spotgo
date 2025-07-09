@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/zmb3/spotify/v2"
-	"golang.org/x/oauth2"
 )
 
 var playerCmd = &cobra.Command{
@@ -45,8 +44,6 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	}
 	client := spotify.New(connect.Auth.Client(context.Background(), token))
 
-	go refresh(token)
-
 	if oneLine {
 		oneLineOutput(client, noProgress, scroll)
 	}
@@ -61,13 +58,6 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	_, err = p.Run()
 	if err != nil {
 		log.Fatal(err)
-	}
-}
-
-func refresh(token *oauth2.Token) {
-	for {
-		time.Sleep(10 * time.Minute)
-		connect.RefreshToken(token)
 	}
 }
 
