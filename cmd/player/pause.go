@@ -2,12 +2,9 @@ package player
 
 import (
 	"context"
-	"fmt"
 	"log"
 
-	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
 	"github.com/spf13/cobra"
-	"github.com/zmb3/spotify/v2"
 )
 
 var playerPauseCmd = &cobra.Command{
@@ -22,14 +19,8 @@ func init() {
 }
 
 func spotifyPause(cmd *cobra.Command, args []string) {
-	token, err := connect.LoadOAuthToken()
+	err := spotgoClient.Pause(context.Background())
 	if err != nil {
-		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
+		log.Fatalf("Error pausing playback: %v", err)
 	}
-
-	client := spotify.New(connect.Auth.Client(context.Background(), token))
-
-	client.Pause(context.Background())
-
-	fmt.Println("Playback paused")
 }

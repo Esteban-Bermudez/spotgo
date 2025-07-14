@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
 	"github.com/spf13/cobra"
-	"github.com/zmb3/spotify/v2"
 )
 
 var playerToggleCmd = &cobra.Command{
@@ -22,23 +20,16 @@ func init() {
 }
 
 func spotifyToggle(cmd *cobra.Command, args []string) {
-	token, err := connect.LoadOAuthToken()
+	playerState, err := spotgoClient.PlayerState(context.Background())
 	if err != nil {
-		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
-	}
-
-	client := spotify.New(connect.Auth.Client(context.Background(), token))
-
-	playerState, err := client.PlayerState(context.Background())
-	if err != nil {
-		log.Fatal("Error getting player state")
+		log.Fatalf("Error getting player state: %v", err)
 	}
 
 	if playerState.Playing {
-		client.Pause(context.Background())
+		spotgoClient.Pause(context.Background())
 		fmt.Println("Paused playback")
 	} else {
-		client.Play(context.Background())
+		spotgoClient.Play(context.Background())
 		fmt.Println("Resumed playback")
 	}
 }

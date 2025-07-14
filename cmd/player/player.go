@@ -6,20 +6,29 @@ import (
 	"log"
 	"time"
 
-	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
+	"github.com/Esteban-Bermudez/spotgo/config"
 	bubbletea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/zmb3/spotify/v2"
 )
 
+var spotgoClient *spotify.Client
+
 var playerCmd = &cobra.Command{
 	Use:   "player",
 	Short: "Show now playing information",
 	Long:  `Show the current spotify playback session in a full screen terminal interface`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		connect.ConnectCmd.Run(cmd, args)
+		v, err := config.LoadConfig()
+		if err != nil {
+			log.Fatal("Error loading config file, Run `spotgo connect` to create a config file and connect to Spotify")
+		}
+		spotgoClient, err = config.SpotifyClient(context.Background(), v)
+		if err != nil {
+			log.Fatal("Error creating Spotify client, Run `spotgo connect` to connect to Spotify")
+		}
 	},
 	Run: spotifyPlayer,
 }
@@ -38,24 +47,18 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	scroll, _ := cmd.Flags().GetInt("scroll")
 
-	token, err := connect.LoadOAuthToken()
-	if err != nil {
-		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
-	}
-	client := spotify.New(connect.Auth.Client(context.Background(), token))
-
 	if oneLine {
-		oneLineOutput(client, noProgress, scroll)
+		oneLineOutput(spotgoClient, noProgress, scroll)
 	}
 
 	p := bubbletea.NewProgram(model{
-		client:        client,
+		client:        spotgoClient,
 		songTitle:     "No Song Playing",
 		progress:      "00:00 / 00:00",
 		playbackState: false,
 	}, bubbletea.WithAltScreen())
 
-	_, err = p.Run()
+	_, err := p.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
