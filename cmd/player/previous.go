@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Esteban-Bermudez/spotgo/cmd/connect"
 	"github.com/spf13/cobra"
-	"github.com/zmb3/spotify/v2"
 )
 
 var playerPreviousCmd = &cobra.Command{
@@ -22,14 +20,10 @@ func init() {
 }
 
 func spotifyPrevious(cmd *cobra.Command, args []string) {
-	token, err := connect.LoadOAuthToken()
+	err := spotgoClient.Previous(context.Background())
 	if err != nil {
-		log.Fatal("Error loading token, Run `spotgo connect` to connect to Spotify")
+		log.Fatalf("Error skipping to previous track: %v", err)
 	}
-
-	client := spotify.New(connect.Auth.Client(context.Background(), token))
-
-	client.Previous(context.Background())
 
 	fmt.Println("Previous track")
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -18,17 +19,13 @@ import (
 )
 
 func InitConfig() (*viper.Viper, error) {
-	v := viper.New()
+	v, err := LoadConfig()
+	if err == nil {
+		return v, nil
+	}
 
-	v.SetConfigName("spotgo")
-	v.SetConfigType("json")
-	v.AddConfigPath(os.ExpandEnv("$HOME/.config/spotgo/"))    // Default config directory
-	v.AddConfigPath(os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")) // Optional: XDG config directory
-	v.AddConfigPath(os.ExpandEnv("$HOME/.spotgo/"))           // Optional: Home directory
+	missingConfig := errors.As(err, &viper.ConfigFileNotFoundError{})
 
-	err := v.ReadInConfig()
-	var configFileNotFoundError *viper.ConfigFileNotFoundError
-	missingConfig := errors.As(err, configFileNotFoundError)
 	if missingConfig && v.ConfigFileUsed() == "" {
 		err = setDefaultConfig(v) // Set default values with a login prompt
 		if err != nil {
@@ -39,18 +36,15 @@ func InitConfig() (*viper.Viper, error) {
 	} else if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
-	t, err := getOAuthToken(v) // Ensure the token is loaded
-	if err != nil {
-		return nil, fmt.Errorf("error getting OAuth token: %w", err)
-	}
-	_, err = RefreshAndSaveToken(t, v)
-	if err != nil {
-		return nil, fmt.Errorf("error refreshing and saving token: %w", err)
-	}
 	return v, nil
 }
 
-func RefreshAndSaveToken(t *oauth2.Token, v *viper.Viper) (*oauth2.Token, error) {
+func RefreshAndSaveToken(v *viper.Viper) (*oauth2.Token, error) {
+	t, err := getOAuthToken(v)
+	if err != nil {
+		return nil, fmt.Errorf("error getting OAuth token: %w", err)
+	}
+
 	if t.Expiry.Before(time.Now()) {
 		auth := getAuthenticator()
 		token, err := auth.RefreshToken(context.Background(), t)
@@ -83,15 +77,34 @@ func getAuthenticator() *spotifyauth.Authenticator {
 	return auth
 }
 
+func LoadConfig() (*viper.Viper, error) {
+	v := viper.New()
+
+	v.SetConfigName("spotgo")
+	v.SetConfigType("json")
+	v.AddConfigPath(os.ExpandEnv("$HOME/.config/spotgo/"))    // Default config directory
+	v.AddConfigPath(os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")) // Optional: XDG config directory
+	v.AddConfigPath(os.ExpandEnv("$HOME/.spotgo/"))           // Optional: Home directory
+
+	err := v.ReadInConfig()
+	if err != nil {
+		return v, fmt.Errorf("error reading config file: %w", err)
+	}
+	_, err = RefreshAndSaveToken(v)
+	if err != nil {
+		return v, fmt.Errorf("error refreshing and saving token: %w", err)
+	}
+	return v, nil
+}
+
 func setDefaultConfig(v *viper.Viper) error {
 	// login the user and create a token
 	codeVerifier, err := generateRandomString(32)
 	if err != nil {
 		return fmt.Errorf("failed to generate random code verifier: %w", err)
 	}
-
-	codeChallenge := base64.URLEncoding.WithPadding(base64.NoPadding).
-		EncodeToString([]byte(hashSha256(codeVerifier)))
+	hash := sha256.Sum256([]byte(codeVerifier))
+	codeChallenge := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(hash[:])
 
 	state, err := generateRandomString(16)
 	if err != nil {
