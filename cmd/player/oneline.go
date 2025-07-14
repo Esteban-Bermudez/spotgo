@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/zmb3/spotify/v2"
@@ -20,7 +21,8 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 		}
 
 		if playerState.Item == nil {
-			fmt.Print("\r󰝛  No Song Playing")
+			fmt.Println("\r󰝛  No Song Playing")
+			os.Exit(0)
 		} else if playerState.Item != nil && playerState.Playing {
 			icon = "  "
 			output = fmt.Sprintf(" %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
