@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/pkg/browser"
@@ -19,14 +20,14 @@ import (
 )
 
 func InitConfig() (*viper.Viper, error) {
+	log.Println("Initializing configuration...")
 	v, err := LoadConfig()
-	if err == nil {
-		return v, nil
-	}
+	log.Println("Loaded config file, checking for token...")
 
 	missingConfig := errors.As(err, &viper.ConfigFileNotFoundError{})
 
 	if missingConfig && v.ConfigFileUsed() == "" {
+		log.Println("No config file found, creating a new one...")
 		err = setDefaultConfig(v) // Set default values with a login prompt
 		if err != nil {
 			return nil, fmt.Errorf("failed to set default config: %w", err)
@@ -35,6 +36,11 @@ func InitConfig() (*viper.Viper, error) {
 		return v, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
+	}
+	log.Println("Config file found, attempting to refresh token...")
+	_, err = RefreshAndSaveToken(v)
+	if err != nil {
+		return v, fmt.Errorf("error refreshing and saving token: %w", err)
 	}
 	return v, nil
 }
@@ -45,12 +51,19 @@ func RefreshAndSaveToken(v *viper.Viper) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("error getting OAuth token: %w", err)
 	}
 
+	mutex := &sync.Mutex{}
+	mutex.Lock()
+	defer mutex.Unlock()
 	if t.Expiry.Before(time.Now()) {
 		auth := getAuthenticator()
 		token, err := auth.RefreshToken(context.Background(), t)
 		if err != nil {
 			return nil, fmt.Errorf("error refreshing token: %w", err)
 		}
+		if token == t {
+			return t, nil // No need to update if the token is the same
+		}
+
 		tokenMap, err := MarshalToken(token)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling token: %w", err)
@@ -88,12 +101,12 @@ func LoadConfig() (*viper.Viper, error) {
 
 	err := v.ReadInConfig()
 	if err != nil {
-		return v, fmt.Errorf("error reading config file: %w", err)
+		return v, fmt.Errorf("error loading config file: %w", err)
 	}
-	_, err = RefreshAndSaveToken(v)
-	if err != nil {
-		return v, fmt.Errorf("error refreshing and saving token: %w", err)
-	}
+	// _, err = RefreshAndSaveToken(v)
+	// if err != nil {
+	// 	return v, fmt.Errorf("error refreshing and saving token: %w", err)
+	// }
 	return v, nil
 }
 
