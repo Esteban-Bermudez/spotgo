@@ -26,12 +26,20 @@ func InitConfig() (*viper.Viper, error) {
 
 	missingConfig := errors.As(err, &viper.ConfigFileNotFoundError{})
 
-	if missingConfig && v.ConfigFileUsed() == "" {
+	if missingConfig {
+		configDir := os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")
+		if configDir == "/spotgo/" {
+			configDir = os.ExpandEnv("$HOME/.config/spotgo/")
+		}
+		err = os.MkdirAll(configDir, 0700)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create config directory: %w", err)
+		}
+
 		err = setDefaultConfig(v) // Set default values with a login prompt
 		if err != nil {
 			return nil, fmt.Errorf("failed to set default config: %w", err)
 		}
-		v.SetConfigFile(os.ExpandEnv("$HOME/.config/spotgo/spotgo.json"))
 		return v, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
@@ -69,7 +77,7 @@ func getAuthenticator() *spotifyauth.Authenticator {
 	clientID := "762ca48c26614d3389d0c1337bc65d48"
 	auth := spotifyauth.New(
 		spotifyauth.WithClientID(clientID),
-		spotifyauth.WithRedirectURL("http://localhost:8679/callback"),
+		spotifyauth.WithRedirectURL("http://127.0.0.1:8679/callback"),
 		spotifyauth.WithScopes(spotifyauth.ScopeUserReadPlaybackState,
 			spotifyauth.ScopeUserReadCurrentlyPlaying,
 			spotifyauth.ScopeUserModifyPlaybackState))
@@ -82,8 +90,8 @@ func LoadConfig() (*viper.Viper, error) {
 
 	v.SetConfigName("spotgo")
 	v.SetConfigType("json")
-	v.AddConfigPath(os.ExpandEnv("$HOME/.config/spotgo/"))    // Default config directory
-	v.AddConfigPath(os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")) // Optional: XDG config directory
+	v.AddConfigPath(os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")) // Default: XDG config directory
+	v.AddConfigPath(os.ExpandEnv("$HOME/.config/spotgo/"))    // Optional: config directory
 	v.AddConfigPath(os.ExpandEnv("$HOME/.spotgo/"))           // Optional: Home directory
 
 	err := v.ReadInConfig()
