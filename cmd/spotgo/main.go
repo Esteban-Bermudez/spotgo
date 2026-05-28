@@ -7,6 +7,7 @@ import (
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	// This ensures the init commands in the sub commands run
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/connect"
+	_ "github.com/Esteban-Bermudez/spotgo/cmd/devices"
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/player"
 )
 
