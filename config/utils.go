@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -32,4 +34,28 @@ func MarshalToken(token *oauth2.Token) (map[string]any, error) {
 		"refresh_token": token.RefreshToken,
 		"expiry":        token.Expiry.Format(time.RFC3339),
 	}, nil
+}
+
+func DataDir() string {
+	if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
+		return filepath.Join(xdgDataHome, "spotgo")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "share", "spotgo")
+}
+
+func ConfigDir() string {
+	if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
+		return filepath.Join(xdgConfigHome, "spotgo")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "spotgo")
+}
+
+func StateDir() string {
+	if xdgStateHome := os.Getenv("XDG_STATE_HOME"); xdgStateHome != "" {
+		return filepath.Join(xdgStateHome, "spotgo")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "state", "spotgo")
 }

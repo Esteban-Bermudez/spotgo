@@ -27,11 +27,7 @@ func InitConfig() (*viper.Viper, error) {
 	missingConfig := errors.As(err, &viper.ConfigFileNotFoundError{})
 
 	if missingConfig {
-		configDir := os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")
-		if configDir == "/spotgo/" {
-			configDir = os.ExpandEnv("$HOME/.config/spotgo/")
-		}
-		err = os.MkdirAll(configDir, 0700)
+		err = os.MkdirAll(ConfigDir(), 0700)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create config directory: %w", err)
 		}
@@ -90,9 +86,8 @@ func LoadConfig() (*viper.Viper, error) {
 
 	v.SetConfigName("spotgo")
 	v.SetConfigType("json")
-	v.AddConfigPath(os.ExpandEnv("$XDG_CONFIG_HOME/spotgo/")) // Default: XDG config directory
-	v.AddConfigPath(os.ExpandEnv("$HOME/.config/spotgo/"))    // Optional: config directory
-	v.AddConfigPath(os.ExpandEnv("$HOME/.spotgo/"))           // Optional: Home directory
+
+	v.AddConfigPath(ConfigDir())
 
 	err := v.ReadInConfig()
 	if err != nil {
