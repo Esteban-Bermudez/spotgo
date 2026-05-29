@@ -43,30 +43,103 @@ func InitConfig() (*viper.Viper, error) {
 	return v, nil
 }
 
+// saveToken persists token to the config file. The caller is responsible for
+// holding the token lock (see lockToken) so concurrent writers don't clobber
+// each other.
+func saveToken(v *viper.Viper, token *oauth2.Token) error {
+	tokenMap, err := MarshalToken(token)
+	if err != nil {
+		return fmt.Errorf("error marshaling token: %w", err)
+	}
+	v.Set("token", tokenMap)
+	if err := v.WriteConfig(); err != nil {
+		return fmt.Errorf("error writing config file: %w", err)
+	}
+	return nil
+}
+
+// RefreshAndSaveToken refreshes the stored token if it has expired and persists
+// the result. It is safe to call from multiple spotgo processes concurrently:
+// it takes an exclusive lock and re-reads the token from disk before deciding
+// to refresh, so a token another process just rotated is reused rather than
+// refreshed again (which would invalidate it under Spotify's PKCE rotation).
 func RefreshAndSaveToken(v *viper.Viper) (*oauth2.Token, error) {
+	unlock, err := lockToken()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	// Re-read from disk: another instance may have refreshed (and rotated)
+	// the token since this viper instance last loaded it.
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("error re-reading config file: %w", err)
+	}
+
 	t, err := getOAuthToken(v)
 	if err != nil {
 		return nil, fmt.Errorf("error getting OAuth token: %w", err)
 	}
 
-	if t.Expiry.Before(time.Now()) {
-		auth := getAuthenticator()
-		token, err := auth.RefreshToken(context.Background(), t)
-		if err != nil {
-			return nil, fmt.Errorf("error refreshing token: %w", err)
-		}
-		tokenMap, err := MarshalToken(token)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling token: %w", err)
-		}
-		v.Set("token", tokenMap)
-		err = v.WriteConfig()
-		if err != nil {
-			return nil, fmt.Errorf("error writing config file: %w", err)
-		}
-		return token, nil
+	// Token.Valid() applies a small expiry buffer, so we don't refresh a token
+	// that's about to expire mid-request either.
+	if t.Valid() {
+		return t, nil
 	}
-	return t, nil
+
+	auth := getAuthenticator()
+	token, err := auth.RefreshToken(context.Background(), t)
+	if err != nil {
+		return nil, fmt.Errorf("error refreshing token: %w", err)
+	}
+	if err := saveToken(v, token); err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+// persistingTokenSource is an oauth2.TokenSource that refreshes expired tokens
+// and writes the rotated token back to the config file. Spotify's
+// Authorization Code + PKCE flow issues a new refresh token on every refresh
+// and invalidates the previous one, so a refresh whose result is not persisted
+// leaves a dead refresh token on disk — the cause of "invalid refresh token"
+// after a long-running session. This source closes that gap and coordinates
+// with other processes via the same lock used by RefreshAndSaveToken.
+type persistingTokenSource struct {
+	v    *viper.Viper
+	auth *spotifyauth.Authenticator
+	ctx  context.Context
+}
+
+func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
+	unlock, err := lockToken()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	// Re-read from disk so we pick up a token another instance may have just
+	// refreshed, instead of refreshing our own (now possibly stale) copy.
+	if err := p.v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("error re-reading config file: %w", err)
+	}
+
+	tok, err := getOAuthToken(p.v)
+	if err != nil {
+		return nil, err
+	}
+	if tok.Valid() {
+		return tok, nil
+	}
+
+	newTok, err := p.auth.RefreshToken(p.ctx, tok)
+	if err != nil {
+		return nil, fmt.Errorf("error refreshing token: %w", err)
+	}
+	if err := saveToken(p.v, newTok); err != nil {
+		return nil, err
+	}
+	return newTok, nil
 }
 
 func getAuthenticator() *spotifyauth.Authenticator {
@@ -200,7 +273,13 @@ func SpotifyClient(ctx context.Context, v *viper.Viper) (*spotify.Client, error)
 	}
 
 	auth := getAuthenticator()
-	client := spotify.New(auth.Client(ctx, token))
+	// Wrap our persisting source in a ReuseTokenSource so the in-memory access
+	// token is reused for every API call and we only hit the lock + disk + a
+	// network refresh when it actually expires. Crucially, when it does refresh,
+	// persistingTokenSource writes the rotated refresh token back to disk —
+	// unlike the default auth.Client, whose refreshes were lost.
+	src := oauth2.ReuseTokenSource(token, &persistingTokenSource{v: v, auth: auth, ctx: ctx})
+	client := spotify.New(oauth2.NewClient(ctx, src))
 	if client == nil {
 		return nil, fmt.Errorf("failed to create Spotify client")
 	}
