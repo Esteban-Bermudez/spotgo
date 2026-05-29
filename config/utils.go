@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -33,6 +34,30 @@ func MarshalToken(token *oauth2.Token) (map[string]any, error) {
 		"token_type":    token.TokenType,
 		"refresh_token": token.RefreshToken,
 		"expiry":        token.Expiry.Format(time.RFC3339),
+	}, nil
+}
+
+// lockToken acquires an exclusive, cross-process advisory lock so that two
+// spotgo instances (e.g. a foreground command and a long-running
+// `player --oneline` in tmux) never refresh — and therefore rotate — the same
+// Spotify refresh token concurrently. It returns an unlock function that the
+// caller must invoke (typically via defer).
+func lockToken() (func(), error) {
+	if err := os.MkdirAll(ConfigDir(), 0700); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+	lockPath := filepath.Join(ConfigDir(), "token.lock")
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open token lock file: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("failed to acquire token lock: %w", err)
+	}
+	return func() {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
 	}, nil
 }
 
