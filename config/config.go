@@ -279,7 +279,10 @@ func SpotifyClient(ctx context.Context, v *viper.Viper) (*spotify.Client, error)
 	// persistingTokenSource writes the rotated refresh token back to disk —
 	// unlike the default auth.Client, whose refreshes were lost.
 	src := oauth2.ReuseTokenSource(token, &persistingTokenSource{v: v, auth: auth, ctx: ctx})
-	client := spotify.New(oauth2.NewClient(ctx, src))
+	// WithRetry makes the client honor Spotify's Retry-After header on HTTP 429
+	// instead of surfacing a hard error, so a brief rate-limit spike backs off
+	// and recovers rather than killing a long-running player.
+	client := spotify.New(oauth2.NewClient(ctx, src), spotify.WithRetry(true))
 	if client == nil {
 		return nil, fmt.Errorf("failed to create Spotify client")
 	}
