@@ -52,10 +52,7 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	}
 
 	p := bubbletea.NewProgram(model{
-		client:        spotgoClient,
-		songTitle:     "No Song Playing",
-		progress:      "00:00 / 00:00",
-		playbackState: false,
+		client: spotgoClient,
 	}, bubbletea.WithAltScreen())
 
 	_, err := p.Run()
@@ -65,18 +62,26 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 }
 
 type model struct {
-	client         *spotify.Client
-	songTitle      string
-	currentArtists string
-	currentAlbum   string
-	progress       string
-	playbackState  bool
-	width          int
-	height         int
+	client    *spotify.Client
+	state     *spotify.PlayerState
+	fetchedAt time.Time
+	lastPoll  time.Time
+	width     int
+	height    int
 }
 
 func (m model) Init() bubbletea.Cmd {
-	return fetchSongInfo(m)
+	return bubbletea.Batch(pollState(m.client), tick())
+}
+
+// dueForPoll decides whether this render tick should also trigger an API poll:
+// either the steady-state interval has elapsed, or the current track is
+// expected to have ended (rate-limited by trackEndRepollGap).
+func (m model) dueForPoll() bool {
+	if time.Since(m.lastPoll) >= pollInterval {
+		return true
+	}
+	return trackEnded(m.state, m.fetchedAt) && time.Since(m.lastPoll) >= trackEndRepollGap
 }
 
 func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
@@ -86,48 +91,48 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 		m.height = msg.Height
 		return m, bubbletea.SetWindowTitle("spotgo")
 
-	case songInfoMsg:
-		m.songTitle = msg.title
-		m.currentArtists = msg.artists
-		m.currentAlbum = msg.album
-		m.progress = msg.progress
-		m.playbackState = msg.playbackState
-		return m, fetchSongInfo(m)
+	case tickMsg:
+		// Re-render on every tick (the progress bar is interpolated locally),
+		// but only hit the Spotify API once per pollInterval — or as soon as the
+		// current track is expected to have ended, so a natural song change
+		// shows up promptly without raising the steady-state request rate.
+		if m.dueForPoll() {
+			m.lastPoll = time.Time(msg)
+			return m, bubbletea.Batch(pollState(m.client), tick())
+		}
+		return m, tick()
+
+	case stateMsg:
+		// Transient errors (network blips, rate limiting) keep the last known
+		// state on screen and retry on the next poll instead of crashing.
+		if msg.err == nil {
+			m.state = msg.state
+			m.fetchedAt = msg.fetchedAt
+		}
+		return m, nil
 
 	case bubbletea.KeyMsg:
-		if msg.String() == "ctrl+c" || msg.String() == "q" {
+		switch msg.String() {
+		case "ctrl+c", "q":
 			return m, bubbletea.Quit
-		}
 
-		if msg.String() == " " {
-			if m.playbackState {
-				err := m.client.Pause(context.Background())
-				if err != nil {
-					log.Fatal(err)
-				}
+		case " ":
+			// Control errors are non-fatal: re-poll and let the UI reflect the
+			// real state rather than killing the player on a transient failure.
+			if m.state != nil && m.state.Playing {
+				_ = m.client.Pause(context.Background())
 			} else {
-				err := m.client.Play(context.Background())
-				if err != nil {
-					log.Fatal(err)
-				}
+				_ = m.client.Play(context.Background())
 			}
-			return m, fetchSongInfo(m)
-		}
+			return m, pollState(m.client)
 
-		if msg.String() == "n" {
-			err := m.client.Next(context.Background())
-			if err != nil {
-				log.Fatal(err)
-			}
-			return m, fetchSongInfo(m)
-		}
+		case "n":
+			_ = m.client.Next(context.Background())
+			return m, pollState(m.client)
 
-		if msg.String() == "p" {
-			err := m.client.Previous(context.Background())
-			if err != nil {
-				log.Fatal(err)
-			}
-			return m, fetchSongInfo(m)
+		case "p":
+			_ = m.client.Previous(context.Background())
+			return m, pollState(m.client)
 		}
 	}
 
@@ -143,8 +148,22 @@ func (m model) View() string {
 		Width(50).
 		Height(10)
 
+	songTitle := "No Song Playing"
+	artists := ""
+	album := ""
+	progress := "00:00 // 00:00"
+	playing := false
+
+	if m.state != nil && m.state.Item != nil {
+		songTitle = m.state.Item.Name
+		artists = joinArtists(m.state.Item.Artists)
+		album = m.state.Item.Album.Name
+		progress = progressBar(interpolatedProgressMS(m.state, m.fetchedAt), int(m.state.Item.Duration))
+		playing = m.state.Playing
+	}
+
 	var icon string
-	if m.playbackState {
+	if playing {
 		icon = " "
 	} else {
 		icon = " "
@@ -152,11 +171,11 @@ func (m model) View() string {
 
 	content := fmt.Sprintf(
 		"%s\n\n%s\n\n%s\n\n|<| %s |>|\n%s",
-		m.songTitle,
-		m.currentArtists,
-		m.currentAlbum,
+		songTitle,
+		artists,
+		album,
 		icon,
-		m.progress,
+		progress,
 	)
 
 	return lipgloss.Place(
@@ -175,58 +194,83 @@ func (m model) View() string {
 	)
 }
 
-type songInfoMsg struct {
-	title         string
-	artists       string
-	album         string
-	progress      string
-	playbackState bool
+// pollInterval is how often the players actually call the Spotify API.
+// renderInterval is how often the UI refreshes locally. Keeping the API poll
+// well above the render rate is what keeps request volume low enough to avoid
+// rate limiting, even with several players running at once.
+const (
+	pollInterval   = 4 * time.Second
+	renderInterval = 500 * time.Millisecond
+	// trackEndRepollGap bounds how often the track-end predictor may fire, so we
+	// don't poll repeatedly in the brief window between requesting a poll at a
+	// track boundary and the fresh state arriving.
+	trackEndRepollGap = 1 * time.Second
+)
+
+// trackEnded reports whether a playing track has reached (interpolated) its end,
+// which is our cue that a new song has likely started.
+func trackEnded(state *spotify.PlayerState, fetchedAt time.Time) bool {
+	if state == nil || state.Item == nil || !state.Playing {
+		return false
+	}
+	return interpolatedProgressMS(state, fetchedAt) >= int(state.Item.Duration)
 }
 
-func fetchSongInfo(m model) bubbletea.Cmd {
+// tickMsg drives the render loop; stateMsg carries a freshly polled player
+// state (or the error from trying to fetch it).
+type (
+	tickMsg  time.Time
+	stateMsg struct {
+		state     *spotify.PlayerState
+		fetchedAt time.Time
+		err       error
+	}
+)
+
+func tick() bubbletea.Cmd {
+	return bubbletea.Tick(renderInterval, func(t time.Time) bubbletea.Msg {
+		return tickMsg(t)
+	})
+}
+
+func pollState(client *spotify.Client) bubbletea.Cmd {
 	return func() bubbletea.Msg {
-		// Load OAuth token and create Spotify client
-		playerState, err := m.client.PlayerState(context.Background())
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if playerState.Item == nil {
-			time.Sleep(5 * time.Second)
-			return songInfoMsg{
-				title:    "No Song Playing",
-				artists:  "",
-				album:    "",
-				progress: "00:00 // 00:00",
-			}
-		}
-
-		songTitle := playerState.Item.Name
-		artists := ""
-		for i, artist := range playerState.Item.Artists {
-			if i == 0 {
-				artists = artist.Name
-			} else {
-				artists = fmt.Sprintf("%s, %s", artists, artist.Name)
-			}
-		}
-		album := playerState.Item.Album.Name
-		progress := progressBar(playerState)
-
-		return songInfoMsg{
-			title:         songTitle,
-			artists:       artists,
-			album:         album,
-			progress:      progress,
-			playbackState: playerState.Item != nil && playerState.Playing,
-		}
+		state, err := client.PlayerState(context.Background())
+		return stateMsg{state: state, fetchedAt: time.Now(), err: err}
 	}
 }
 
-func progressBar(playerState *spotify.PlayerState) string {
+// interpolatedProgressMS advances the track progress by the wall-clock time
+// elapsed since the state was fetched, so the progress bar stays live between
+// API polls. Progress only advances while playing and never exceeds the track
+// duration.
+func interpolatedProgressMS(state *spotify.PlayerState, fetchedAt time.Time) int {
+	progress := int(state.Progress)
+	if state.Playing {
+		progress += int(time.Since(fetchedAt).Milliseconds())
+	}
+	if duration := int(state.Item.Duration); progress > duration {
+		progress = duration
+	}
+	return progress
+}
+
+func joinArtists(artists []spotify.SimpleArtist) string {
+	names := ""
+	for i, artist := range artists {
+		if i == 0 {
+			names = artist.Name
+		} else {
+			names = fmt.Sprintf("%s, %s", names, artist.Name)
+		}
+	}
+	return names
+}
+
+func progressBar(progressMS, durationMS int) string {
 	return fmt.Sprintf("%02d:%02d // %02d:%02d",
-		(playerState.Progress/1000)/60,
-		(playerState.Progress/1000)%60,
-		(playerState.Item.Duration/1000)/60,
-		(playerState.Item.Duration/1000)%60)
+		(progressMS/1000)/60,
+		(progressMS/1000)%60,
+		(durationMS/1000)/60,
+		(durationMS/1000)%60)
 }

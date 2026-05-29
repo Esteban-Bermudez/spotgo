@@ -3,7 +3,6 @@ package player
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -14,10 +13,37 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 	output := ""
 	index := 0
 	icon := "󰝛 "
+	var (
+		playerState *spotify.PlayerState
+		fetchedAt   time.Time
+		lastPoll    time.Time
+		polled      bool
+	)
 	for {
-		playerState, err := client.PlayerState(context.Background())
-		if err != nil {
-			log.Fatal(err)
+		now := time.Now()
+		// Only call the Spotify API once per pollInterval; the loop ticks faster
+		// so the scroll effect and progress bar stay smooth between polls. This
+		// is what keeps request volume low when several players are running.
+		// Also poll as soon as the current track is expected to have ended, so a
+		// natural song change shows up promptly without raising the steady rate.
+		dueForPoll := now.Sub(lastPoll) >= pollInterval ||
+			(trackEnded(playerState, fetchedAt) && now.Sub(lastPoll) >= trackEndRepollGap)
+		if !polled || dueForPoll {
+			lastPoll = now
+			s, err := client.PlayerState(context.Background())
+			if err != nil {
+				// Transient error (incl. rate limiting after the client's own
+				// retries): keep the last known state and retry next interval
+				// instead of dying.
+				if !polled {
+					time.Sleep(pollInterval)
+					continue
+				}
+			} else {
+				playerState = s
+				fetchedAt = now
+				polled = true
+			}
 		}
 
 		if playerState.Item == nil {
@@ -31,8 +57,8 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 			output = fmt.Sprintf(" %s - %s", playerState.Item.Name, playerState.Item.Artists[0].Name)
 		}
 
-		if playerState.Item != nil && !noProgress {
-			output = fmt.Sprintf(" %s | %s ", output, progressBar(playerState))
+		if !noProgress {
+			output = fmt.Sprintf(" %s | %s ", output, progressBar(interpolatedProgressMS(playerState, fetchedAt), int(playerState.Item.Duration)))
 		}
 
 		// Rotate the output string by one character to the left. This creates a
@@ -55,8 +81,8 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 			index = index % (len(output) - len(icon) - 1)
 		}
 
-		// Sleep for a second before fetching the next song info. This helps to
-		// reduce the number of requests made to the Spotify API.
-		time.Sleep(500 * time.Millisecond)
+		// Refresh the line frequently for smooth scrolling/progress; the actual
+		// API poll is throttled separately above (pollInterval).
+		time.Sleep(renderInterval)
 	}
 }
