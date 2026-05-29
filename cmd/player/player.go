@@ -85,6 +85,7 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, bubbletea.SetWindowTitle("spotgo")
+
 	case songInfoMsg:
 		m.songTitle = msg.title
 		m.currentArtists = msg.artists
@@ -96,6 +97,37 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 	case bubbletea.KeyMsg:
 		if msg.String() == "ctrl+c" || msg.String() == "q" {
 			return m, bubbletea.Quit
+		}
+
+		if msg.String() == " " {
+			if m.playbackState {
+				err := m.client.Pause(context.Background())
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				err := m.client.Play(context.Background())
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			return m, fetchSongInfo(m)
+		}
+
+		if msg.String() == "n" {
+			err := m.client.Next(context.Background())
+			if err != nil {
+				log.Fatal(err)
+			}
+			return m, fetchSongInfo(m)
+		}
+
+		if msg.String() == "p" {
+			err := m.client.Previous(context.Background())
+			if err != nil {
+				log.Fatal(err)
+			}
+			return m, fetchSongInfo(m)
 		}
 	}
 
