@@ -16,12 +16,27 @@ before:
     - go generate ./...
 
 builds:
-  - env:
+  # Linux has no OS now-playing surface (spotifyd already exposes MPRIS there),
+  # so the bridge compiles to a no-op and this stays pure-Go. Windows is not
+  # supported.
+  - id: spotgo
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
+    main: ./cmd/spotgo/main.go
+
+  # macOS links the MediaPlayer framework via DarwinKit (cgo), so CGO must be on.
+  # NOTE: this build must run on a macOS host (it needs the Xcode frameworks);
+  # it cannot be cross-compiled from Linux CI.
+  - id: spotgo-darwin
+    env:
+      - CGO_ENABLED=1
+    goos:
       - darwin
+    goarch:
+      - amd64
+      - arm64
     main: ./cmd/spotgo/main.go
 
 archives:
@@ -34,10 +49,6 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
-    format_overrides:
-      - goos: windows
-        format: zip
 
 changelog:
   sort: asc

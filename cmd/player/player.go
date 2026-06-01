@@ -47,18 +47,22 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	scroll, _ := cmd.Flags().GetInt("scroll")
 
+	// On macOS, runNowPlaying owns the NSApplication run loop so the track shows
+	// in Control Center and the media keys drive playback; the player runs inside
+	// it on a goroutine. On other platforms it just calls the worker directly.
 	if oneLine {
-		oneLineOutput(spotgoClient, noProgress, scroll)
+		runNowPlaying(spotgoClient, func() { oneLineOutput(spotgoClient, noProgress, scroll) })
+		return
 	}
 
-	p := bubbletea.NewProgram(model{
-		client: spotgoClient,
-	}, bubbletea.WithAltScreen())
-
-	_, err := p.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
+	runNowPlaying(spotgoClient, func() {
+		p := bubbletea.NewProgram(model{
+			client: spotgoClient,
+		}, bubbletea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			log.Fatal(err)
+		}
+	})
 }
 
 type model struct {
@@ -108,6 +112,11 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 		if msg.err == nil {
 			m.state = msg.state
 			m.fetchedAt = msg.fetchedAt
+			elapsed := 0
+			if m.state.Item != nil {
+				elapsed = interpolatedProgressMS(m.state, m.fetchedAt)
+			}
+			updateNowPlaying(m.state, elapsed)
 		}
 		return m, nil
 
