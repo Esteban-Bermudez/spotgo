@@ -11,6 +11,7 @@ import (
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/devices"
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/player"
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/play"
+	_ "github.com/Esteban-Bermudez/spotgo/cmd/queue"
 )
 
 func main() {
