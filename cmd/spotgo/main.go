@@ -10,6 +10,7 @@ import (
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/daemon"
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/devices"
 	_ "github.com/Esteban-Bermudez/spotgo/cmd/player"
+	_ "github.com/Esteban-Bermudez/spotgo/cmd/play"
 )
 
 func main() {
