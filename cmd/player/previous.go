@@ -2,7 +2,6 @@ package player
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/spf13/cobra"
@@ -24,6 +23,4 @@ func spotifyPrevious(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalf("Error skipping to previous track: %v", err)
 	}
-
-	fmt.Println("Previous track")
 }
