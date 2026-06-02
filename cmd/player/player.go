@@ -146,7 +146,24 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 		case "p":
 			_ = m.client.Previous(context.Background())
 			return m, pollState(m.client)
+
+		case "-":
+			if m.state != nil {
+				newVolume := m.state.Device.Volume - 10
+				newVolume = max(0, newVolume)
+				_ = m.client.Volume(context.Background(), int(newVolume))
+			}
+			return m, pollState(m.client)
+
+		case "+", "=":
+			if m.state != nil {
+				newVolume := m.state.Device.Volume + 10
+				newVolume = min(100, newVolume)
+				_ = m.client.Volume(context.Background(), int(newVolume))
+			}
+			return m, pollState(m.client)
 		}
+
 	}
 
 	return m, nil
@@ -177,9 +194,9 @@ func (m model) View() string {
 
 	var icon string
 	if playing {
-		icon = " "
+		icon = ""
 	} else {
-		icon = " "
+		icon = ""
 	}
 
 	content := fmt.Sprintf(
@@ -212,8 +229,9 @@ func (m model) View() string {
 // well above the render rate is what keeps request volume low enough to avoid
 // rate limiting, even with several players running at once.
 const (
-	pollInterval   = 4 * time.Second
-	renderInterval = 500 * time.Millisecond
+	pollInterval   = 2 * time.Second
+	renderInterval = 1 * time.Second
+
 	// trackEndRepollGap bounds how often the track-end predictor may fire, so we
 	// don't poll repeatedly in the brief window between requesting a poll at a
 	// track boundary and the fresh state arriving.
