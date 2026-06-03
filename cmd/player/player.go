@@ -162,8 +162,11 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 				_ = m.client.Volume(context.Background(), int(newVolume))
 			}
 			return m, pollState(m.client)
-		}
 
+		case "s":
+			_ = m.client.Shuffle(context.Background(), !m.state.ShuffleState)
+			return m, pollState(m.client)
+		}
 	}
 
 	return m, nil
