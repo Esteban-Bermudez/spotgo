@@ -166,6 +166,21 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 		case "s":
 			_ = m.client.Shuffle(context.Background(), !m.state.ShuffleState)
 			return m, pollState(m.client)
+
+		case "r":
+			var newRepeat string
+			switch m.state.RepeatState {
+			case "off":
+				newRepeat = "context"
+			case "context":
+				newRepeat = "track"
+			case "track":
+				newRepeat = "off"
+			default:
+				newRepeat = "off"
+			}
+			_ = m.client.Repeat(context.Background(), newRepeat)
+			return m, pollState(m.client)
 		}
 	}
 
