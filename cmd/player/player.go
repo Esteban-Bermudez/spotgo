@@ -186,6 +186,7 @@ func (m model) View() string {
 	album := ""
 	progress := "00:00 // 00:00"
 	playing := false
+	var shuffle, repeat string
 
 	if m.state != nil && m.state.Item != nil {
 		songTitle = m.state.Item.Name
@@ -193,6 +194,22 @@ func (m model) View() string {
 		album = m.state.Item.Album.Name
 		progress = progressBar(interpolatedProgressMS(m.state, m.fetchedAt), int(m.state.Item.Duration))
 		playing = m.state.Playing
+		if m.state.ShuffleState {
+			shuffle = ""
+		} else {
+			shuffle = " "
+		}
+
+		switch m.state.RepeatState {
+		case "off":
+			repeat = "󰑗"
+		case "context":
+			repeat = "󰑖"
+		case "track":
+			repeat = "󰑘"
+		default:
+			repeat = " "
+		}
 	}
 
 	var icon string
@@ -203,11 +220,13 @@ func (m model) View() string {
 	}
 
 	content := fmt.Sprintf(
-		"%s\n\n%s\n\n%s\n\n|<| %s |>|\n%s",
+		"%s\n\n%s\n\n%s\n\n%s |<| %s |>| %s\n%s",
 		songTitle,
 		artists,
 		album,
+		shuffle,
 		icon,
+		repeat,
 		progress,
 	)
 
