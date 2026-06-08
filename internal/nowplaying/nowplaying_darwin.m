@@ -16,6 +16,11 @@
 // Retained for the process lifetime so the delegate isn't deallocated.
 static SpotgoAppDelegate *gDelegate = nil;
 
+// The current track's album art, re-applied on every npSetNowPlaying so it
+// survives the dictionary being rebuilt each poll. Set asynchronously once the
+// image has downloaded.
+static MPMediaItemArtwork *gArtwork = nil;
+
 static void npRegisterCommands(void) {
   MPRemoteCommandCenter *center = [MPRemoteCommandCenter sharedCommandCenter];
 
@@ -84,15 +89,19 @@ void npSetNowPlaying(const char *title, const char *artist, const char *album,
     NSString *nsArtist = artist ? @(artist) : @"";
     NSString *nsAlbum = album ? @(album) : @"";
     dispatch_async(dispatch_get_main_queue(), ^{
-      MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
-      center.nowPlayingInfo = @{
+      NSMutableDictionary *info = [@{
         MPMediaItemPropertyTitle : nsTitle,
         MPMediaItemPropertyArtist : nsArtist,
         MPMediaItemPropertyAlbumTitle : nsAlbum,
         MPMediaItemPropertyPlaybackDuration : @(durationSec),
         MPNowPlayingInfoPropertyElapsedPlaybackTime : @(elapsedSec),
         MPNowPlayingInfoPropertyPlaybackRate : @(rate),
-      };
+      } mutableCopy];
+      if (gArtwork != nil) {
+        info[MPMediaItemPropertyArtwork] = gArtwork;
+      }
+      MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
+      center.nowPlayingInfo = info;
       center.playbackState = (MPNowPlayingPlaybackState)state;
     });
   }
@@ -100,8 +109,51 @@ void npSetNowPlaying(const char *title, const char *artist, const char *album,
 
 void npClearNowPlaying(void) {
   dispatch_async(dispatch_get_main_queue(), ^{
+    gArtwork = nil;
     MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
     center.nowPlayingInfo = @{};
     center.playbackState = MPNowPlayingPlaybackStateStopped;
+  });
+}
+
+void npSetArtwork(const void *data, int len) {
+  if (data == NULL || len <= 0) {
+    return;
+  }
+  @autoreleasepool {
+    // Copy the bytes now; the C pointer is only valid for this call.
+    NSData *imageData = [NSData dataWithBytes:data length:(NSUInteger)len];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      NSImage *image = [[NSImage alloc] initWithData:imageData];
+      if (image == nil) {
+        return;
+      }
+      gArtwork = [[MPMediaItemArtwork alloc]
+          initWithBoundsSize:image.size
+              requestHandler:^NSImage *(CGSize size) {
+                return image;
+              }];
+      // Merge into the current info so the cover appears without waiting for the
+      // next poll.
+      MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
+      NSMutableDictionary *info = [center.nowPlayingInfo mutableCopy];
+      if (info == nil) {
+        return;
+      }
+      info[MPMediaItemPropertyArtwork] = gArtwork;
+      center.nowPlayingInfo = info;
+    });
+  }
+}
+
+void npClearArtwork(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    gArtwork = nil;
+    MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
+    NSMutableDictionary *info = [center.nowPlayingInfo mutableCopy];
+    if (info != nil) {
+      [info removeObjectForKey:MPMediaItemPropertyArtwork];
+      center.nowPlayingInfo = info;
+    }
   });
 }

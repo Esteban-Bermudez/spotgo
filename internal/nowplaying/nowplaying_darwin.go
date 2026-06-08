@@ -7,6 +7,7 @@
 package nowplaying
 
 /*
+#cgo CFLAGS: -fobjc-arc
 #cgo LDFLAGS: -framework Cocoa -framework MediaPlayer
 #include <stdlib.h>
 #include "nowplaying_darwin.h"
@@ -16,8 +17,12 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/zmb3/spotify/v2"
@@ -27,6 +32,10 @@ var (
 	spotifyClient *spotify.Client
 	workerFunc    func()
 	playing       atomic.Bool // last published playback state, read by the toggle key
+
+	artClient = &http.Client{Timeout: 10 * time.Second}
+	artMu     sync.Mutex
+	artURL    string // album-art URL applied for the current track; guards stale fetches
 )
 
 // Run registers the keyboard media keys and runs the macOS run loop so the track
@@ -87,9 +96,12 @@ func Update(state *spotify.PlayerState, elapsedMS int) {
 	playing.Store(isPlaying)
 
 	if !hasTrack {
+		setArtwork("")
 		C.npClearNowPlaying()
 		return
 	}
+
+	setArtwork(bestArtworkURL(state.Item.Album.Images))
 
 	title := C.CString(state.Item.Name)
 	artist := C.CString(joinArtists(state.Item.Artists))
@@ -112,6 +124,66 @@ func Update(state *spotify.PlayerState, elapsedMS int) {
 		C.double(rate),
 		pbState,
 	)
+}
+
+// setArtwork drives album-art updates. When the art URL changes it clears the
+// previous cover immediately and downloads the new one in the background; an
+// unchanged URL is a no-op so we don't re-download every poll.
+func setArtwork(url string) {
+	artMu.Lock()
+	if url == artURL {
+		artMu.Unlock()
+		return
+	}
+	artURL = url
+	artMu.Unlock()
+
+	C.npClearArtwork()
+	if url == "" {
+		return
+	}
+	go fetchArtwork(url)
+}
+
+func fetchArtwork(url string) {
+	data, err := downloadArtwork(url)
+	if err != nil {
+		log.Printf("nowplaying: artwork fetch failed: %v", err)
+		return
+	}
+	if len(data) == 0 {
+		return
+	}
+
+	// Hold the lock across the apply so a track that changed mid-download can't
+	// have its (now stale) cover published.
+	artMu.Lock()
+	defer artMu.Unlock()
+	if artURL != url {
+		return
+	}
+	C.npSetArtwork(unsafe.Pointer(&data[0]), C.int(len(data)))
+}
+
+func downloadArtwork(url string) ([]byte, error) {
+	resp, err := artClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	// Cap the read so a misbehaving server can't balloon memory; album art is
+	// well under this.
+	return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+}
+
+// bestArtworkURL returns the album-art URL to display. Spotify orders images
+// largest-first; the largest looks crisp in Control Center and is fetched only
+// once per album.
+func bestArtworkURL(images []spotify.Image) string {
+	if len(images) == 0 {
+		return ""
+	}
+	return images[0].URL
 }
 
 func joinArtists(artists []spotify.SimpleArtist) string {

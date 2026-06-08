@@ -34,4 +34,12 @@ void npSetNowPlaying(const char *title, const char *artist, const char *album,
 // npClearNowPlaying clears the now-playing info (nothing playing).
 void npClearNowPlaying(void);
 
+// npSetArtwork sets the current track's album art from encoded image bytes
+// (PNG/JPEG). The bytes are copied, so the caller may free them after the call.
+void npSetArtwork(const void *data, int len);
+
+// npClearArtwork removes the album art (e.g. on track change, before the new
+// cover has finished downloading).
+void npClearArtwork(void);
+
 #endif
