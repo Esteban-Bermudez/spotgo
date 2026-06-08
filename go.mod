@@ -2,15 +2,10 @@ module github.com/Esteban-Bermudez/spotgo
 
 go 1.23.0
 
-// Pin the toolchain below 1.25: DarwinKit's cgo/FFI layer crashes at runtime on
-// Go 1.25.x (progrium/darwinkit#286). Keep this until that issue is resolved.
-toolchain go1.23.12
-
 require (
 	github.com/charmbracelet/bubbletea v1.2.4
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
-	github.com/progrium/darwinkit v0.5.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0

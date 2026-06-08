@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Esteban-Bermudez/spotgo/internal/nowplaying"
 	"github.com/zmb3/spotify/v2"
 )
 
@@ -43,12 +44,12 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 				playerState = s
 				fetchedAt = now
 				polled = true
-				updateNowPlaying(playerState, interpolatedProgressMS(playerState, fetchedAt))
+				nowplaying.Update(playerState, interpolatedProgressMS(playerState, fetchedAt))
 			}
 		}
 
 		if playerState.Item == nil {
-			updateNowPlaying(nil, 0)
+			nowplaying.Update(nil, 0)
 			fmt.Println("\r󰝛  No Song Playing")
 			os.Exit(0)
 		} else if playerState.Item != nil && playerState.Playing {
