@@ -87,15 +87,20 @@ func goMediaCommand(cmd C.int) {
 	}()
 }
 
-// Update pushes the current track and playback position to Control Center. The
-// OS interpolates elapsed time from the playback rate, so publishing once per
-// poll keeps the timeline in sync without extra API traffic.
+// Update pushes the current track and playback position to Control Center while
+// Spotify is playing, and clears it otherwise so spotgo never holds the Now
+// Playing slot when it isn't the thing actually making sound. The OS
+// interpolates elapsed time from the playback rate, so publishing once per poll
+// keeps the timeline in sync without extra API traffic.
 func Update(state *spotify.PlayerState, elapsedMS int) {
 	hasTrack := state != nil && state.Item != nil
 	isPlaying := hasTrack && state.Playing
 	playing.Store(isPlaying)
 
-	if !hasTrack {
+	// Only claim the OS Now Playing slot while Spotify is actually playing.
+	// When it's paused, stopped, or idle we clear our entry so we don't overwrite
+	// whatever else owns the media controls (a browser tab, Jellyfin, etc.).
+	if !isPlaying {
 		setArtwork("")
 		C.npClearNowPlaying()
 		return

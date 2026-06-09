@@ -255,6 +255,9 @@ func pollState(client *spotify.Client) bubbletea.Cmd {
 // API polls. Progress only advances while playing and never exceeds the track
 // duration.
 func interpolatedProgressMS(state *spotify.PlayerState, fetchedAt time.Time) int {
+	if state == nil || state.Item == nil {
+		return 0
+	}
 	progress := int(state.Progress)
 	if state.Playing {
 		progress += int(time.Since(fetchedAt).Milliseconds())

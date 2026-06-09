@@ -49,7 +49,6 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 		}
 
 		if playerState.Item == nil {
-			nowplaying.Update(nil, 0)
 			fmt.Println("\r󰝛  No Song Playing")
 			os.Exit(0)
 		} else if playerState.Item != nil && playerState.Playing {
