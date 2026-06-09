@@ -9,6 +9,7 @@ import (
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	"github.com/Esteban-Bermudez/spotgo/config"
 	"github.com/Esteban-Bermudez/spotgo/internal/nowplaying"
+	"github.com/Esteban-Bermudez/spotgo/internal/playback"
 	bubbletea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -132,7 +133,9 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 			if m.state != nil && m.state.Playing {
 				_ = m.client.Pause(context.Background())
 			} else {
-				_ = m.client.Play(context.Background())
+				// Resume falls back to the spotgo daemon device when the
+				// session has gone idle and nothing is active anymore.
+				_ = playback.Resume(context.Background(), m.client)
 			}
 			return m, pollState(m.client)
 

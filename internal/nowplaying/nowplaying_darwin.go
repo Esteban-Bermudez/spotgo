@@ -25,6 +25,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/Esteban-Bermudez/spotgo/internal/playback"
 	"github.com/zmb3/spotify/v2"
 )
 
@@ -63,18 +64,20 @@ func goMediaCommand(cmd C.int) {
 		return
 	}
 	// Run the Web API call off the run loop so a slow request never blocks it.
+	// Resume (rather than Play) falls back to the spotgo daemon device when the
+	// session has gone idle and Spotify reports no active device.
 	go func() {
 		var err error
 		switch int(cmd) {
 		case int(C.NP_CMD_PLAY):
-			err = client.Play(context.Background())
+			err = playback.Resume(context.Background(), client)
 		case int(C.NP_CMD_PAUSE):
 			err = client.Pause(context.Background())
 		case int(C.NP_CMD_TOGGLE):
 			if playing.Load() {
 				err = client.Pause(context.Background())
 			} else {
-				err = client.Play(context.Background())
+				err = playback.Resume(context.Background(), client)
 			}
 		case int(C.NP_CMD_NEXT):
 			err = client.Next(context.Background())

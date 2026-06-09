@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Esteban-Bermudez/spotgo/internal/playback"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +30,9 @@ func spotifyToggle(cmd *cobra.Command, args []string) {
 		spotgoClient.Pause(context.Background())
 		fmt.Println("Paused playback")
 	} else {
-		spotgoClient.Play(context.Background())
+		if err := playback.Resume(context.Background(), spotgoClient); err != nil {
+			log.Fatalf("Error resuming playback: %v", err)
+		}
 		fmt.Println("Resumed playback")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/Esteban-Bermudez/spotgo/internal/playback"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +20,7 @@ func init() {
 }
 
 func spotifyPlay(cmd *cobra.Command, args []string) {
-	err := spotgoClient.Play(context.Background())
+	err := playback.Resume(context.Background(), spotgoClient)
 	if err != nil {
 		log.Fatalf("Error starting or resuming playback: %v", err)
 	}

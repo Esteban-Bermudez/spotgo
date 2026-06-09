@@ -35,6 +35,17 @@ var startCmd = &cobra.Command{
 
 		if runtime.GOOS == "darwin" {
 			c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+			// Capture spotifyd's output; in foreground mode it otherwise goes to
+			// /dev/null, leaving nothing to inspect when the session drops.
+			logPath := filepath.Join(stateDir, "spotifyd.log")
+			logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				defer logFile.Close()
+				c.Stdout = logFile
+				c.Stderr = logFile
+			}
+
 			if err := c.Start(); err != nil {
 				return fmt.Errorf("failed to start spotifyd: %w", err)
 			}
