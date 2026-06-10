@@ -26,9 +26,12 @@ var startCmd = &cobra.Command{
 		os.MkdirAll(stateDir, 0755)
 		pidFile := filepath.Join(stateDir, "spotifyd.pid")
 
-		if _, err := os.Stat(pidFile); err == nil {
-			return fmt.Errorf("spotifyd may already be running. Check %s", pidFile)
+		if pid, running := runningPidFromFile(pidFile); running {
+			return fmt.Errorf("spotifyd is already running (PID %d). Run `spotgo daemon stop` first", pid)
 		}
+		// A leftover pid file whose process is gone (e.g. spotifyd crashed)
+		// must not block a fresh start.
+		os.Remove(pidFile)
 
 		spotifydArgs := spotifydStartArgs(runtime.GOOS, pidFile)
 		c := exec.Command(binPath, spotifydArgs...)
