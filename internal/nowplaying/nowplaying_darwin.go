@@ -90,9 +90,19 @@ func goMediaCommand(cmd C.int) {
 	}()
 }
 
-// Update pushes the current track and playback position to Control Center while
-// Spotify is playing, and clears it otherwise so spotgo never holds the Now
-// Playing slot when it isn't the thing actually making sound. The OS
+// lastPublished remembers what Update last sent to Control Center. While
+// playing we publish every poll (keeps the timeline corrected), but a paused
+// track is published exactly once: re-asserting ourselves every poll while
+// paused is what used to shove spotgo above whatever was actively playing (a
+// browser tab, Jellyfin, etc.). Published once, a paused entry stays in the
+// Control Center stack — resumable from the media keys, artwork visible —
+// while the actively-playing app keeps the top spot. Only touched from the
+// player's poll loop, so no synchronization needed.
+var lastPublished string
+
+// Update pushes the current track and playback position to Control Center.
+// While playing it publishes every poll; a paused track is published once (see
+// lastPublished); with no track at all the entry is cleared. The OS
 // interpolates elapsed time from the playback rate, so publishing once per poll
 // keeps the timeline in sync without extra API traffic.
 func Update(state *spotify.PlayerState, elapsedMS int) {
@@ -100,13 +110,26 @@ func Update(state *spotify.PlayerState, elapsedMS int) {
 	isPlaying := hasTrack && state.Playing
 	playing.Store(isPlaying)
 
-	// Only claim the OS Now Playing slot while Spotify is actually playing.
-	// When it's paused, stopped, or idle we clear our entry so we don't overwrite
-	// whatever else owns the media controls (a browser tab, Jellyfin, etc.).
-	if !isPlaying {
-		setArtwork("")
-		C.npClearNowPlaying()
+	// Nothing loaded at all (session gone): release the Now Playing slot.
+	if !hasTrack {
+		if lastPublished != "" {
+			lastPublished = ""
+			setArtwork("")
+			C.npClearNowPlaying()
+		}
 		return
+	}
+
+	if isPlaying {
+		lastPublished = "playing"
+	} else {
+		// Paused: publish once per track so the entry stays resumable without
+		// fighting other apps for the slot on every poll.
+		pausedKey := "paused|" + string(state.Item.ID)
+		if lastPublished == pausedKey {
+			return
+		}
+		lastPublished = pausedKey
 	}
 
 	setArtwork(bestArtworkURL(state.Item.Album.Images))
