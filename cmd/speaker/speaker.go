@@ -10,6 +10,7 @@ import (
 
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	"github.com/Esteban-Bermudez/spotgo/config"
+	"github.com/Esteban-Bermudez/spotgo/internal/nowplaying"
 	"github.com/Esteban-Bermudez/spotgo/internal/playback"
 	"github.com/Esteban-Bermudez/spotgo/internal/session"
 	"github.com/spf13/cobra"
@@ -80,9 +81,7 @@ func runSpeakerForeground() {
 	go claimSpeaker()
 	go watchShutdown(cancel)
 	fmt.Println("spotgo speaker running — Ctrl+C to stop")
-	if err := sess.Run(ctx); err != nil {
-		log.Printf("speaker ended: %v", err)
-	}
+	runWithMediaKeys(sess, ctx)
 }
 
 func runSpeakerChild() {
@@ -96,9 +95,7 @@ func runSpeakerChild() {
 	defer session.RemovePidFile()
 	go claimSpeaker()
 	go watchShutdown(cancel)
-	if err := sess.Run(ctx); err != nil {
-		log.Printf("speaker ended: %v", err)
-	}
+	runWithMediaKeys(sess, ctx)
 }
 
 // watchShutdown cancels on SIGINT/SIGTERM and then force-exits: the
@@ -112,6 +109,39 @@ func watchShutdown(cancel context.CancelFunc) {
 	time.Sleep(2 * time.Second)
 	session.RemovePidFile()
 	os.Exit(0)
+}
+
+// runWithMediaKeys runs the speaker session with the OS media controls
+// attached: Control Center / media keys work while the speaker runs, with
+// no TUI open. nowplaying.Run owns the main thread on darwin and runs the
+// worker on a goroutine; elsewhere it just runs the worker directly.
+func runWithMediaKeys(sess *session.Session, ctx context.Context) {
+	nowplaying.Run(spotgoClient, func() {
+		go publishLoop(ctx)
+		if err := sess.Run(ctx); err != nil {
+			log.Printf("speaker ended: %v", err)
+		}
+	})
+}
+
+// publishLoop mirrors the player TUI poll: every 2s the current Web API
+// state is pushed to Control Center. The speaker is the single publisher
+// while alive; the player yields to it (see player stateMsg).
+func publishLoop(ctx context.Context) {
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			state, err := spotgoClient.PlayerState(ctx)
+			if err != nil || state == nil {
+				continue
+			}
+			nowplaying.Update(state, int(state.Progress))
+		}
+	}
 }
 
 func claimSpeaker() {

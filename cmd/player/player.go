@@ -46,6 +46,13 @@ func init() {
 		IntP("scroll", "s", 0, "Scroll the output string if greater than n characters")
 }
 
+// speakerOwned reports whether a speaker process (foreground or background)
+// is alive and therefore owns media keys and Control Center.
+func speakerOwned() bool {
+	_, ok := session.BackgroundRunning()
+	return ok
+}
+
 // maybeStartSpeaker prompts before the TUI takes over when no speaker is
 // running. A yes starts it detached (the speaker claims the device itself);
 // the player then acts as a remote. One-line mode never prompts.
@@ -82,22 +89,31 @@ func spotifyPlayer(cmd *cobra.Command, args []string) {
 		maybeStartSpeaker()
 	}
 
-	// On macOS, nowplaying.Run owns the NSApplication run loop so the track shows
-	// in Control Center and the media keys drive playback; the player runs inside
-	// it on a goroutine. On other platforms it just calls the worker directly.
+	// One-line mode is a read-only status-bar scraper: no media keys, no
+	// Control Center publishing. A short-lived publisher that exits after ~1s
+	// is what makes media controls flicker.
 	if oneLine {
-		nowplaying.Run(spotgoClient, func() { oneLineOutput(spotgoClient, noProgress, scroll) })
+		oneLineOutput(spotgoClient, noProgress, scroll)
 		return
 	}
 
-	nowplaying.Run(spotgoClient, func() {
+	runUI := func() {
 		p := bubbletea.NewProgram(model{
 			client: spotgoClient,
 		}, bubbletea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			log.Fatal(err)
 		}
-	})
+	}
+
+	// When the speaker is alive it owns media keys and Control Center, so
+	// the TUI stays a pure remote. Otherwise the TUI owns them (main
+	// behavior): nowplaying.Run owns the NSApplication run loop on macOS.
+	if speakerOwned() {
+		runUI()
+		return
+	}
+	nowplaying.Run(spotgoClient, runUI)
 }
 
 type model struct {
@@ -151,7 +167,9 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 			if m.state.Item != nil {
 				elapsed = interpolatedProgressMS(m.state, m.fetchedAt)
 			}
-			nowplaying.Update(m.state, elapsed)
+			if !speakerOwned() {
+				nowplaying.Update(m.state, elapsed)
+			}
 		}
 		return m, nil
 
