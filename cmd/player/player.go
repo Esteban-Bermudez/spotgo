@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	"github.com/Esteban-Bermudez/spotgo/config"
 	"github.com/Esteban-Bermudez/spotgo/internal/nowplaying"
 	"github.com/Esteban-Bermudez/spotgo/internal/playback"
+	"github.com/Esteban-Bermudez/spotgo/internal/session"
 	bubbletea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -44,27 +46,74 @@ func init() {
 		IntP("scroll", "s", 0, "Scroll the output string if greater than n characters")
 }
 
+// speakerOwned reports whether a speaker process (foreground or background)
+// is alive and therefore owns media keys and Control Center.
+func speakerOwned() bool {
+	_, ok := session.BackgroundRunning()
+	return ok
+}
+
+// maybeStartSpeaker prompts before the TUI takes over when no speaker is
+// running. A yes starts it detached (the speaker claims the device itself);
+// the player then acts as a remote. One-line mode never prompts.
+func maybeStartSpeaker() {
+	if !session.HasStoredCredentials() {
+		return
+	}
+	if _, ok := session.BackgroundRunning(); ok {
+		return
+	}
+	fmt.Print("The spotgo speaker is not running. Start it in the background? [y/N]: ")
+	var answer string
+	if _, err := fmt.Scanln(&answer); err != nil {
+		return
+	}
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer != "y" && answer != "yes" {
+		return
+	}
+	pid, err := session.StartBackground()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("spotgo speaker running in the background (PID %d).\n", pid)
+}
+
 func spotifyPlayer(cmd *cobra.Command, args []string) {
 	oneLine, _ := cmd.Flags().GetBool("one-line")
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	scroll, _ := cmd.Flags().GetInt("scroll")
 
-	// On macOS, nowplaying.Run owns the NSApplication run loop so the track shows
-	// in Control Center and the media keys drive playback; the player runs inside
-	// it on a goroutine. On other platforms it just calls the worker directly.
+	if !oneLine {
+		maybeStartSpeaker()
+	}
+
+	// One-line mode is a read-only status-bar scraper: no media keys, no
+	// Control Center publishing. A short-lived publisher that exits after ~1s
+	// is what makes media controls flicker.
 	if oneLine {
-		nowplaying.Run(spotgoClient, func() { oneLineOutput(spotgoClient, noProgress, scroll) })
+		oneLineOutput(spotgoClient, noProgress, scroll)
 		return
 	}
 
-	nowplaying.Run(spotgoClient, func() {
+	runUI := func() {
 		p := bubbletea.NewProgram(model{
 			client: spotgoClient,
 		}, bubbletea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			log.Fatal(err)
 		}
-	})
+	}
+
+	// When the speaker is alive it owns media keys and Control Center, so
+	// the TUI stays a pure remote. Otherwise the TUI owns them (main
+	// behavior): nowplaying.Run owns the NSApplication run loop on macOS.
+	if speakerOwned() {
+		runUI()
+		return
+	}
+	nowplaying.Run(spotgoClient, runUI)
 }
 
 type model struct {
@@ -118,7 +167,9 @@ func (m model) Update(msg bubbletea.Msg) (bubbletea.Model, bubbletea.Cmd) {
 			if m.state.Item != nil {
 				elapsed = interpolatedProgressMS(m.state, m.fetchedAt)
 			}
-			nowplaying.Update(m.state, elapsed)
+			if !speakerOwned() {
+				nowplaying.Update(m.state, elapsed)
+			}
 		}
 		return m, nil
 

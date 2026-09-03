@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/Esteban-Bermudez/spotgo/internal/nowplaying"
 	"github.com/zmb3/spotify/v2"
 )
 
@@ -44,7 +43,6 @@ func oneLineOutput(client *spotify.Client, noProgress bool, scroll int) {
 				playerState = s
 				fetchedAt = now
 				polled = true
-				nowplaying.Update(playerState, interpolatedProgressMS(playerState, fetchedAt))
 			}
 		}
 
