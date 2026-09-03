@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	"github.com/Esteban-Bermudez/spotgo/config"
+	"github.com/Esteban-Bermudez/spotgo/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -39,4 +41,16 @@ func connectToSpotify(cmd *cobra.Command, args []string) {
 		log.Fatal("Error getting current user:", err)
 	}
 	fmt.Println("Connected to Spotify as:", user.DisplayName)
+
+	if session.HasStoredCredentials() {
+		fmt.Println("Speaker already set up.")
+		return
+	}
+	fmt.Println("Setting up the spotgo speaker (browser opens once)...")
+	setupCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+	if err := session.Setup(setupCtx); err != nil {
+		log.Fatal("Error setting up speaker:", err)
+	}
+	fmt.Println("Speaker ready.")
 }

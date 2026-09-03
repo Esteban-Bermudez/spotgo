@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Esteban-Bermudez/spotgo/cmd/root"
 	"github.com/Esteban-Bermudez/spotgo/config"
 	"github.com/Esteban-Bermudez/spotgo/internal/nowplaying"
 	"github.com/Esteban-Bermudez/spotgo/internal/playback"
+	"github.com/Esteban-Bermudez/spotgo/internal/session"
 	bubbletea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -44,10 +46,41 @@ func init() {
 		IntP("scroll", "s", 0, "Scroll the output string if greater than n characters")
 }
 
+// maybeStartSpeaker prompts before the TUI takes over when no speaker is
+// running. A yes starts it detached (the speaker claims the device itself);
+// the player then acts as a remote. One-line mode never prompts.
+func maybeStartSpeaker() {
+	if !session.HasStoredCredentials() {
+		return
+	}
+	if _, ok := session.BackgroundRunning(); ok {
+		return
+	}
+	fmt.Print("The spotgo speaker is not running. Start it in the background? [y/N]: ")
+	var answer string
+	if _, err := fmt.Scanln(&answer); err != nil {
+		return
+	}
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer != "y" && answer != "yes" {
+		return
+	}
+	pid, err := session.StartBackground()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("spotgo speaker running in the background (PID %d).\n", pid)
+}
+
 func spotifyPlayer(cmd *cobra.Command, args []string) {
 	oneLine, _ := cmd.Flags().GetBool("one-line")
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	scroll, _ := cmd.Flags().GetInt("scroll")
+
+	if !oneLine {
+		maybeStartSpeaker()
+	}
 
 	// On macOS, nowplaying.Run owns the NSApplication run loop so the track shows
 	// in Control Center and the media keys drive playback; the player runs inside

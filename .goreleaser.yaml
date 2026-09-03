@@ -16,19 +16,38 @@ before:
     - go generate ./...
 
 builds:
-  # Linux has no OS now-playing surface (spotifyd already exposes MPRIS there),
-  # so the bridge compiles to a no-op and this stays pure-Go. Windows is not
-  # supported.
+  # Linux has no OS now-playing bridge in spotgo (go-librespot exposes MPRIS there),
+  # so the bridge compiles to a no-op on Linux. Windows is not yet supported.
+  # go-librespot's vorbis/flac/mpg123 decoders need CGO (libogg, libvorbis,
+  # flac, mpg123, plus libasound2 for ALSA), so CGO is on for Linux too.
   - id: spotgo
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - linux
+    goarch:
+      - amd64
+      - arm64
     main: ./cmd/spotgo/main.go
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-linux-gnu -lc
+          - CXX=zig c++ -target x86_64-linux-gnu -lc
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-linux-gnu -lc
+          - CXX=zig c++ -target aarch64-linux-gnu -lc
 
   # macOS links the MediaPlayer framework via DarwinKit (cgo), so CGO must be on.
-  # NOTE: this build must run on a macOS host (it needs the Xcode frameworks);
-  # it cannot be cross-compiled from Linux CI.
+  # zig cc provides a macOS cross-compiler with a bundled SDK, so this build
+  # works from a Linux CI runner (no Xcode required).
   - id: spotgo-darwin
     env:
       - CGO_ENABLED=1
@@ -38,9 +57,24 @@ builds:
       - amd64
       - arm64
     main: ./cmd/spotgo/main.go
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    overrides:
+      - goos: darwin
+        goarch: amd64
+        env:
+          - CC=zig cc -target x86_64-macos -lc
+          - CXX=zig c++ -target x86_64-macos -lc
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CC=zig cc -target aarch64-macos -lc
+          - CXX=zig c++ -target aarch64-macos -lc
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
@@ -49,6 +83,9 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
+
+checksum:
+  name_template: "checksums.txt"
 
 changelog:
   sort: asc
