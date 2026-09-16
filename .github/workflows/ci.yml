@@ -19,20 +19,53 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [test]
-    # zig cc provides a C cross-compiler with bundled SDKs for all targets,
-    # so we build both linux and darwin (CGO on for go-librespot) from a
-    # single ubuntu runner.
-    runs-on: ubuntu-latest
+    # The embedded speaker links CGO audio codecs statically from Homebrew
+    # archives, so the darwin build must run on a native macOS runner.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@v2
-      - name: Install audio dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libasound2-dev libogg-dev libvorbis-dev libflac-dev libmpg123-dev
+      - name: Install audio libraries
+        run: brew install libogg libvorbis flac mpg123
+      - name: Write static pkg-config overrides
+        run: |
+          mkdir -p /tmp/pcstatic
+          cat > /tmp/pcstatic/ogg.pc <<'EOF'
+          Name: ogg
+          Description: ogg static override
+          Version: 1.3.6
+          Libs: /opt/homebrew/opt/libogg/lib/libogg.a
+          EOF
+          cat > /tmp/pcstatic/vorbis.pc <<'EOF'
+          Name: vorbis
+          Description: vorbis static override
+          Version: 1.3.7
+          Libs: /opt/homebrew/opt/libvorbis/lib/libvorbis.a -lm
+          EOF
+          cat > /tmp/pcstatic/vorbisenc.pc <<'EOF'
+          Name: vorbisenc
+          Description: vorbisenc static override
+          Version: 1.3.7
+          Libs: /opt/homebrew/opt/libvorbis/lib/libvorbisenc.a
+          EOF
+          cat > /tmp/pcstatic/flac.pc <<'EOF'
+          Name: FLAC
+          Description: FLAC static override
+          Version: 1.5.0
+          Libs: /opt/homebrew/opt/flac/lib/libFLAC.a /opt/homebrew/opt/libogg/lib/libogg.a -lm
+          EOF
+          cat > /tmp/pcstatic/libmpg123.pc <<'EOF'
+          Name: libmpg123
+          Description: libmpg123 static override
+          Version: 1.33.7
+          Libs: /opt/homebrew/opt/mpg123/lib/libmpg123.a
+          EOF
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PKG_CONFIG_PATH: /tmp/pcstatic
