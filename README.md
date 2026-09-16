@@ -19,6 +19,10 @@ On Debian/Ubuntu, install the runtime audio libs first:
 ```bash
 sudo apt-get install libasound2t64 libogg0 libvorbis0a libvorbisenc2 libflac12t64 libmpg123-0
 ```
+On macOS, install them via Homebrew:
+```bash
+brew install mpg123 flac libvorbis libogg
+```
 Add it to your `$PATH` if needed:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
