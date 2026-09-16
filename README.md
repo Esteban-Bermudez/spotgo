@@ -15,13 +15,9 @@ curl -fsSL https://raw.githubusercontent.com/Esteban-Bermudez/spotgo/main/instal
 ```
 
 This downloads the latest release for your OS/arch into `$HOME/.local/bin` (override with `INSTALL_DIR`).
-On Debian/Ubuntu, install the runtime audio libs first:
+On Linux, install the ALSA runtime library (the audio codecs are statically linked):
 ```bash
-sudo apt-get install libasound2t64 libogg0 libvorbis0a libvorbisenc2 libflac12t64 libmpg123-0
-```
-On macOS, install them via Homebrew:
-```bash
-brew install mpg123 flac libvorbis libogg
+sudo apt-get install libasound2
 ```
 Add it to your `$PATH` if needed:
 ```bash
