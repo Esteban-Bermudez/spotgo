@@ -42,13 +42,7 @@ func playFromURI(cmd *cobra.Command, args []string) {
 	uri := spotify.URI(args[0])
 
 	if strings.HasPrefix(string(uri), "spotify:track:") {
-		err := spotgoClient.PlayOpt(context.Background(), &spotify.PlayOptions{
-			URIs: []spotify.URI{uri},
-		})
-		if err != nil {
-			log.Fatalf("Error playing track URI: %v", err)
-		}
-		log.Printf("Playing Track : %s", uri)
+		playTrackInAlbumContext(uri)
 		return
 	}
 
@@ -60,4 +54,29 @@ func playFromURI(cmd *cobra.Command, args []string) {
 	}
 
 	log.Printf("Playing URI: %s", uri)
+}
+
+// playTrackInAlbumContext plays a track inside its album, starting at the
+// track. A bare uris play ships the device an empty-context command that the
+// embedded speaker (go-librespot) cannot resolve into a track list, so
+// Spotify answers 403 Restriction violated. An album context plus offset
+// carries the same intent in a shape every Connect device understands, and
+// queues the rest of the album behind the track like tapping it in the
+// official apps.
+func playTrackInAlbumContext(uri spotify.URI) {
+	ctx := context.Background()
+	id := spotify.ID(strings.TrimPrefix(string(uri), "spotify:track:"))
+	track, err := spotgoClient.GetTrack(ctx, id)
+	if err != nil {
+		log.Fatalf("Error looking up track %s: %v", uri, err)
+	}
+	albumURI := track.Album.URI
+	err = spotgoClient.PlayOpt(ctx, &spotify.PlayOptions{
+		PlaybackContext: &albumURI,
+		PlaybackOffset:  &spotify.PlaybackOffset{URI: uri},
+	})
+	if err != nil {
+		log.Fatalf("Error playing track URI: %v", err)
+	}
+	log.Printf("Playing Track : %s", uri)
 }
