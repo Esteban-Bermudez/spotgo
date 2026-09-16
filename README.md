@@ -15,6 +15,10 @@ curl -fsSL https://raw.githubusercontent.com/Esteban-Bermudez/spotgo/main/instal
 ```
 
 This downloads the latest release for your OS/arch into `$HOME/.local/bin` (override with `INSTALL_DIR`).
+On Debian/Ubuntu, install the runtime audio libs first:
+```bash
+sudo apt-get install libasound2t64 libogg0 libvorbis0a libvorbisenc2 libflac12t64 libmpg123-0
+```
 Add it to your `$PATH` if needed:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
