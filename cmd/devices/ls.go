@@ -17,14 +17,18 @@ var lsCmd = &cobra.Command{
 			log.Fatalf("Error fetching devices: %v", err)
 		}
 
-		fmt.Printf("%-30s | %-15s | %-10s | %s\n", "NAME", "TYPE", "ACTIVE", "ID")
-		fmt.Println("--------------------------------------------------------------------------------")
+		fmt.Printf("%-30s | %-15s | %-10s | %-10s | %s\n", "NAME", "TYPE", "ACTIVE", "RESTRICTED", "ID")
+		fmt.Println("-------------------------------------------------------------------------------------------")
 		for _, d := range devices {
 			activeStr := ""
 			if d.Active {
 				activeStr = "yes"
 			}
-			fmt.Printf("%-30s | %-15s | %-10s | %s\n", d.Name, d.Type, activeStr, d.ID)
+			restrictedStr := ""
+			if d.Restricted {
+				restrictedStr = "yes"
+			}
+			fmt.Printf("%-30s | %-15s | %-10s | %-10s | %s\n", d.Name, d.Type, activeStr, restrictedStr, d.ID)
 		}
 	},
 }

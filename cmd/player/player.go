@@ -81,7 +81,7 @@ func maybeStartSpeaker() {
 }
 
 func spotifyPlayer(cmd *cobra.Command, args []string) {
-	oneLine, _ := cmd.Flags().GetBool("one-line")
+	oneLine, _ := cmd.Flags().GetBool("oneline")
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	scroll, _ := cmd.Flags().GetInt("scroll")
 
